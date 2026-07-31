@@ -6,7 +6,11 @@
 #ifndef __CWEBPAGE_H_INCLUDED
 #define __CWEBPAGE_H_INCLUDED
 
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <windows.h>
+#endif
 
 #ifdef __cplusplus
 {

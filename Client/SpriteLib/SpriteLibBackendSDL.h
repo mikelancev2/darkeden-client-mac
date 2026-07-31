@@ -17,12 +17,16 @@
 
 #ifdef SPRITELIB_BACKEND_SDL
 
+#if __has_include(<SDL2/SDL.h>)
+#include <SDL2/SDL.h>
+#else
+#include <SDL.h>
+#endif
+
 /* Open extern "C" block for C linkage (matching where types are declared) */
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <SDL2/SDL.h>
 
 /* ============================================================================
  * Internal Surface Structure
@@ -164,6 +168,24 @@ static inline void spritectl_565_to_rgb(uint16_t pixel, uint8_t* r, uint8_t* g, 
 	*r = (r5 << 3) | (r5 >> 2);
 	*g = (g6 << 2) | (g6 >> 4);
 	*b = (b5 << 3) | (b5 >> 2);
+}
+
+/**
+ * Pack 8-bit RGB components into an RGB565 pixel, rounding to the nearest
+ * 5/6-bit level instead of truncating. Plain ((v>>3)<<11) truncation is a
+ * consistent downward bias (e.g. 8-bit 255 truncates to the same 5-bit
+ * level as 248), which systematically darkens/desaturates every blended
+ * pixel - most visible on translucent sprites (shadows, spell effects,
+ * screen fades) where this runs on every pixel every frame.
+ */
+static inline uint16_t spritectl_rgb_to_565(uint8_t r, uint8_t g, uint8_t b) {
+	uint16_t r5 = (uint16_t)((r + 4) >> 3);
+	uint16_t g6 = (uint16_t)((g + 2) >> 2);
+	uint16_t b5 = (uint16_t)((b + 4) >> 3);
+	if (r5 > 0x1F) r5 = 0x1F;
+	if (g6 > 0x3F) g6 = 0x3F;
+	if (b5 > 0x1F) b5 = 0x1F;
+	return (uint16_t)((r5 << 11) | (g6 << 5) | b5);
 }
 
 /**

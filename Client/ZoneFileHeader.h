@@ -6,7 +6,11 @@
 #define	__ZONEFILEHEADER_H__
 
 #ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <Windows.h>
+#endif
 #else
 #include "basic/Platform.h"
 #endif

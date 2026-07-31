@@ -7,11 +7,15 @@
 //-----------------------------------------------------------------------------
 #include "Client_PCH.h"
 
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) && !defined(PLATFORM_USE_SDL)
 #include <MMSystem.h>
+#endif
+
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
 #include <process.h>
 #include <io.h>
 #include <direct.h>
+#include <fcntl.h>
 #else
 #include <unistd.h>
 #include <fcntl.h>
@@ -1265,7 +1269,8 @@ SetMode(enum CLIENT_MODE mode)
 		{
 			// Debug Message
 			DEBUG_ADD("[ SetMode ]  MODE_WAIT_SETPOSITION");
-			
+			{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: enter\n"); fclose(f); } }
+
 			//--------------------------------------------------
 			// Option ÀúÀå
 			//--------------------------------------------------
@@ -1273,10 +1278,12 @@ SetMode(enum CLIENT_MODE mode)
 			{
 				g_pUserOption->SaveToFile( g_pFileDef->getProperty("FILE_INFO_USEROPTION").c_str());
 			}
-			
+			{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: after SaveToFile, before SetStop\n"); fclose(f); } }
+
 			// Á¤Áö..
 			g_pPlayer->SetStop();
 			g_pPlayer->SetAction( ACTION_STAND );
+			{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: after SetStop/SetAction, before SDLInput Clear\n"); fclose(f); } }
 
 			// Å° ÀÔ·Â Á¦°Å
 			g_pSDLInput->Clear();
@@ -1284,9 +1291,11 @@ SetMode(enum CLIENT_MODE mode)
 			g_bLButtonDown = FALSE;
 			g_bRButtonDown = FALSE;
 			g_bCButtonDown = FALSE;
+			{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: before InitSound\n"); fclose(f); } }
 
 			// [ TEST CODE ]
 			InitSound();
+			{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: after InitSound, before first-time SystemMessage\n"); fclose(f); } }
 
 			static int first = 1;
 			if (first)
@@ -1294,6 +1303,7 @@ SetMode(enum CLIENT_MODE mode)
 				g_pSystemMessage->Add((*g_pGameStringTable)[STRING_MESSAGE_HELP_KEY].GetString());
 				first = 0;
 			}
+			{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: after SystemMessage, before CGReady send\n"); fclose(f); } }
 
 			//--------------------------------------------------
 			// °ÔÀÓ ¼­¹ö·Î CGReady ÆÐÅ¶À» º¸³½´Ù.
@@ -1301,9 +1311,11 @@ SetMode(enum CLIENT_MODE mode)
 				CGReady cgReady;
 				g_pSocket->sendPacket( &cgReady );
 				g_pSocket->setPlayerStatus( CPS_WAITING_FOR_GC_SET_POSITION );
+				{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: after sendPacket/setPlayerStatus, before UpdateSocketOutput\n"); fclose(f); } }
 
 				// ¹Ù·Î º¸³½´Ù.
 				UpdateSocketOutput();
+				{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: after UpdateSocketOutput\n"); fclose(f); } }
 
 				// 2002.6.28 [UDP¼öÁ¤]
 				// ¼­¹ö¿¡ UDP port¸¦ ¾Ë·ÁÁÖ±â À§ÇØ¼­
@@ -1325,15 +1337,17 @@ SetMode(enum CLIENT_MODE mode)
 			if (g_pTopView!=NULL)
 			{
 				g_pTopView->ClearShadowManager();
-						
+
 				g_pTopView->SetSelectedNULL();
 			}
-		
+			{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: after TopView cleanup, before WaitPacketUpdate Init\n"); fclose(f); } }
+
 			// update ÇÔ¼ö
-			g_UpdateDelay = DELAY_UPDATE_WAITING;			
+			g_UpdateDelay = DELAY_UPDATE_WAITING;
 			g_pUpdate = g_pCWaitPacketUpdate;
 			g_pCWaitPacketUpdate->SetDelay( g_pClientConfig->MAX_WAIT_PACKET );
 			g_pCWaitPacketUpdate->Init();
+			{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "SetMode MODE_WAIT_SETPOSITION: end reached OK\n"); fclose(f); } }
 		}
 		break;
 
@@ -2582,7 +2596,13 @@ LoadZone(int n)
 		//-------------------------------------------------------
 		//g_ThreadJob = THREADJOB_LOAD_IMAGEOBJECT_SMALLZONE;				
 		//SetEvent(g_hFileEvent);
-		MString filename = (*g_pZoneTable).Get(g_nZoneLarge)->TeenFilename;
+		// fix: this used to start from ->TeenFilename directly (a port typo -
+		// should be the regular ->Filename, only overridden by TeenFilename
+		// below when one exists and GoreLevel is off). Zones with no Teen
+		// variant configured (e.g. Limbo_Lair_SW) got an empty filename,
+		// causing a crash trying to load tile/image-object data from a
+		// file that was never actually opened.
+		MString filename = (*g_pZoneTable).Get(g_nZoneLarge)->Filename;
 		if(g_pUserInformation->GoreLevel == false)
 		{
 			if((*g_pZoneTable).Get(g_nZoneLarge)->TeenFilename.GetLength() > 0)
@@ -2808,7 +2828,7 @@ LoadZone(int n)
 	else
 	{
 		g_ZoneCreatureColorSet = 0xFFFF;
-	}	
+	}
 
 	g_bZoneSafe = pZoneInfo->Safety;
 	g_bHolyLand = pZoneInfo->HolyLand;
@@ -3484,21 +3504,21 @@ MakeScreenShot()
 		maxScreenShot = 1000;
 	#endif
 
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
 	_mkdir("ScreenShot");
 #else
 	mkdir("ScreenShot", 0755);
-#endif // PLATFORM_WINDOWS
+#endif
 	// MAX_SCREENSHOT°³ÀÇ ScreenCapture¸¸ °¡´ÉÇÏ´Ù.
 	for (; g_ScreenShotNumber<maxScreenShot; g_ScreenShotNumber++)
 	{
 		sprintf(str, "%s%03d.jpg", g_pFileDef->getProperty("PATH_SCREENSHOT").c_str(), g_ScreenShotNumber);
 
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
 		int fd = _open( str, _O_RDONLY );
 #else
 		int fd = open( str, O_RDONLY );
-#endif // PLATFORM_WINDOWS
+#endif
 
 		// fileÀÌ ¾ø´Â °æ¿ì¿¡ saveÇÏ±â À§ÇØ¼­..
 		if( fd == -1 )
@@ -5048,10 +5068,14 @@ UpdateDisconnected()
 				point.y = 0;
 				RECT rect = { 0, 0, g_GameRect.right, g_GameRect.bottom };
 
-				g_pBack->BltNoColorkey( &point, g_pLast, &rect );	
+				g_pBack->BltNoColorkey( &point, g_pLast, &rect );
 			}
 
-			CSDLGraphics::Flip();
+			// CSDLGraphics::Flip() is a no-op stub - without an actual
+			// present here, this dialog stays invisible and the loop just
+			// spins waiting for a keypress the user has no way to know to
+			// press, looking exactly like a frozen window.
+			SDL_PresentGameBackBuffer();
 
 			// Yield CPU to prevent 100% usage
 			// On Windows, PeekMessage/GetMessage handle this

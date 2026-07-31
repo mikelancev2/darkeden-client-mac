@@ -13,7 +13,11 @@
 #include "TextSystem/TextService.h"  // Add TextSystem header
 
 // ... rest of includes ...
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <windows.h>
+#endif
 #include "DXLib.h"
 
 #include "VS_UI.h" // include VS UI master header file.

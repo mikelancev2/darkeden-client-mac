@@ -68,11 +68,6 @@
 static spritectl_sprite_t get_backend_sprite(CSprite* pSprite)
 {
 	if (!pSprite || !pSprite->IsInit()) {
-		static int notInitCount = 0;
-		if (notInitCount < 3) {
-			printf("[get_backend_sprite] ERROR: pSprite=%p, IsInit=%d\n", pSprite, pSprite ? pSprite->IsInit() : 0);
-			notInitCount++;
-		}
 		return SPRITECTL_INVALID_SPRITE;
 	}
 
@@ -286,8 +281,38 @@ static spritectl_sprite_t get_backend_shadow_sprite(CShadowSprite* pSprite)
 
 		SA_DEBUG_LIFECYCLE("get_backend_shadow_sprite: Allocated temp pixels=%p", (void*)pixels);
 
-		memset(pixels, 0, data_size);
+		/* fix: CShadowSprite::Blt() only ever writes literal 0x0000 for the
+		 * shadow shape itself (see CShadowSprite.cpp - the RLE "skip" runs
+		 * leave pixels untouched, the "paint" runs memset to 0).
+		 *
+		 * CShadowSprite::GetColorkey() looked like the right "background"
+		 * marker to pre-fill with (matches the class's own SetColorkey API,
+		 * used this way in the old DirectDraw client's SetPixel() encoder),
+		 * but confirmed by direct testing: s_Colorkey defaults to 0
+		 * (CShadowSprite.cpp:17) and the only SetColorkey(0x001F) call
+		 * (MTopView.cpp:1112) is dead - it sits inside a commented-out
+		 * `/* ... *\/` block, in BOTH the old and new client. So
+		 * GetColorkey() is always 0 at runtime - identical to what Blt()
+		 * paints - making shadow and background indistinguishable again,
+		 * same bug under a different name. Use a fixed sentinel instead
+		 * that's guaranteed to differ from Blt()'s hardcoded 0x0000. */
+		const WORD SHADOW_BACKGROUND_SENTINEL = 0xFFFF;
+		WORD backgroundMarker = SHADOW_BACKGROUND_SENTINEL;
+		for (size_t i = 0; i < pixel_count; i++) {
+			pixels[i] = backgroundMarker;
+		}
 		pSprite->Blt(pixels, width * sizeof(WORD));
+
+		/* Remap into the generic 0x0000-is-transparent convention: this
+		 * backend sprite is consumed as a pure shape MASK by
+		 * spritectl_blt_shadow_darken (see SpriteLibBackendSDL.cpp) - it
+		 * only checks whether each pixel is 0x0000 (skip) or not (darken
+		 * the destination there), never reads the actual color, so any
+		 * fixed non-zero marker works here. */
+		const WORD SHADOW_PRESENT_MARKER = 0x0001;
+		for (size_t i = 0; i < pixel_count; i++) {
+			pixels[i] = (pixels[i] == backgroundMarker) ? 0x0000 : SHADOW_PRESENT_MARKER;
+		}
 
 		/* Create backend sprite */
 		spritectl_sprite_t new_sprite = spritectl_create_sprite(
@@ -336,42 +361,66 @@ static spritectl_sprite_t get_backend_index_sprite(CIndexSprite* pSprite)
 		return SPRITECTL_INVALID_SPRITE;
 	}
 
-	/* Lazy creation: create backend sprite if doesn't exist */
-	if (pSprite->GetBackendSprite() == SPRITECTL_INVALID_SPRITE) {
-		WORD width = pSprite->GetWidth();
-		WORD height = pSprite->GetHeight();
-
-		size_t pixel_count = width * height;
-		size_t data_size = pixel_count * sizeof(WORD);
-
-		/* Allocate and decode pixel data (index sprites are RLE-compressed) */
-		WORD* pixels = (WORD*)malloc(data_size);
-		if (!pixels) {
-			return SPRITECTL_INVALID_SPRITE;
-		}
-		memset(pixels, 0, data_size);
-		pSprite->Blt(pixels, width * sizeof(WORD));
-
-		/* Create backend sprite */
-		spritectl_sprite_t new_sprite = spritectl_create_sprite(
-			width, height, SPRITECTL_FORMAT_RGB565,
-			pixels, data_size);
-
-		free(pixels);
-		pSprite->SetBackendSprite(new_sprite);
+	/* fix: CIndexSprite::Blt() resolves each pixel's color from the *current*
+	 * static CIndexSprite::s_IndexValue[0]/[1] (set per-draw by
+	 * CIndexSprite::SetUsingColorSet(), e.g. per-creature helmet/gear
+	 * recolor). This frame object is shared and reused by many different
+	 * creatures/players, each with their own colorSet, so a single cached
+	 * backend sprite isn't enough: it either shows stale colors (the
+	 * original visual bug - one creature's color "locked in" for everyone
+	 * reusing the frame) or, if invalidated+rebuilt on every mismatch,
+	 * constantly destroys and recreates the sprite as different creatures
+	 * take turns using it - malloc/free churn on every draw call, which is
+	 * what caused a progressive FPS decay (confirmed via a native heap
+	 * snapshot diff: ever-growing "unsigned int[]" allocations from this
+	 * exact call site, never freed because a *different* colorSet's use of
+	 * the same frame kept tearing down and rebuilding the cache before the
+	 * previous one's lifetime was really over). The old DirectDraw client
+	 * never had this problem because it resolved colors straight into the
+	 * live framebuffer on every draw, with nothing cached to go stale.
+	 * Fix: cache one backend sprite per distinct colorSet pair actually
+	 * seen for this frame (bounded - see AddBackendSprite), instead of one
+	 * single slot that whichever caller drew last exclusively owns.
+	 */
+	if (pSprite->IsBackendDirty()) {
+		/* Pixel data changed - every color variant cached below is stale
+		 * (SetBackendDirty(true) already cleared them; this just resets
+		 * the flag). */
 		pSprite->SetBackendDirty(false);
 	}
-	/* Sync if dirty */
-	else if (pSprite->IsBackendDirty()) {
-		/* Destroy old sprite and recreate */
-		spritectl_destroy_sprite(pSprite->GetBackendSprite());
-		pSprite->SetBackendSprite(SPRITECTL_INVALID_SPRITE);
 
-		/* Recreate (will be created on next call) */
-		return get_backend_index_sprite(pSprite);
+	int colorSet0 = CIndexSprite::GetUsingColorSet(0);
+	int colorSet1 = CIndexSprite::GetUsingColorSet(1);
+
+	spritectl_sprite_t cached = pSprite->FindBackendSprite(colorSet0, colorSet1);
+	if (cached != SPRITECTL_INVALID_SPRITE) {
+		return cached;
 	}
 
-	return pSprite->GetBackendSprite();
+	/* Not cached for this colorSet yet: decode and cache it. */
+	WORD width = pSprite->GetWidth();
+	WORD height = pSprite->GetHeight();
+
+	size_t pixel_count = width * height;
+	size_t data_size = pixel_count * sizeof(WORD);
+
+	/* Allocate and decode pixel data (index sprites are RLE-compressed) */
+	WORD* pixels = (WORD*)malloc(data_size);
+	if (!pixels) {
+		return SPRITECTL_INVALID_SPRITE;
+	}
+	memset(pixels, 0, data_size);
+	pSprite->Blt(pixels, width * sizeof(WORD));
+
+	/* Create backend sprite */
+	spritectl_sprite_t new_sprite = spritectl_create_sprite(
+		width, height, SPRITECTL_FORMAT_RGB565,
+		pixels, data_size);
+
+	free(pixels);
+	pSprite->AddBackendSprite(colorSet0, colorSet1, new_sprite);
+
+	return new_sprite;
 }
 
 /* ============================================================================
@@ -386,7 +435,6 @@ void CSpriteSurface::BltSprite(POINT* pPoint, CSprite* pSprite) {
 	/* Get backend sprite */
 	spritectl_sprite_t backend_sprite = get_backend_sprite(pSprite);
 	if (!backend_sprite) {
-		LOG_WARN("[BltSprite] ERROR: get_backend_sprite returned invalid sprite! IsInit=%d\n", pSprite->IsInit());
 		return;
 	}
 
@@ -755,11 +803,14 @@ void CSpriteSurface::BltShadowSprite(POINT* pPoint, CShadowSprite* pSprite) {
 		return;
 	}
 
-	/* Blit to backend surface */
-	int flags = 0;
-	int alpha = 255;
-	spritectl_blt_sprite(m_backend_surface, pPoint->x, pPoint->y,
-	                    backend_sprite, flags, alpha);
+	/* fix: the old DirectDraw client's plain (non-Darkness) BltShadowSprite
+	 * paints literal opaque black (CShadowSprite::Blt's memset(dst,0,...)),
+	 * not a flat gray/placeholder color. Reuse the darken blit with a
+	 * shift big enough (>=6, since RGB565's widest channel is 6 bits) to
+	 * crush every channel to 0 regardless of what was underneath - exactly
+	 * equivalent to painting black, using the same shape-mask sprite. */
+	spritectl_blt_shadow_darken(m_backend_surface, pPoint->x, pPoint->y,
+	                             backend_sprite, 16);
 }
 
 void CSpriteSurface::BltShadowSpriteSmall(POINT* pPoint, CShadowSprite* pSprite, BYTE shift) {
@@ -768,8 +819,23 @@ void CSpriteSurface::BltShadowSpriteSmall(POINT* pPoint, CShadowSprite* pSprite,
 }
 
 void CSpriteSurface::BltShadowSpriteDarkness(POINT* pPoint, CShadowSprite* pSprite, BYTE DarkBits) {
-	/* TODO: Implement darkness effect */
-	BltShadowSprite(pPoint, pSprite);
+	if (!pPoint || !pSprite) {
+		return;
+	}
+
+	/* fix: real shadow darkening (see CShadowSprite::BltDarkness in the old
+	 * DirectDraw client) - darkens whatever ground pixels are already at
+	 * this position by right-shifting each RGB channel by DarkBits, rather
+	 * than painting a flat gray color over them. This is what makes shadows
+	 * read as translucent (terrain shows through, just dimmed) instead of
+	 * an opaque colored patch. */
+	spritectl_sprite_t backend_sprite = get_backend_shadow_sprite(pSprite);
+	if (!backend_sprite) {
+		return;
+	}
+
+	spritectl_blt_shadow_darken(m_backend_surface, pPoint->x, pPoint->y,
+	                             backend_sprite, DarkBits);
 }
 
 void CSpriteSurface::BltShadowSprite4444(POINT* pPoint, CShadowSprite* pSprite, WORD pixel) {

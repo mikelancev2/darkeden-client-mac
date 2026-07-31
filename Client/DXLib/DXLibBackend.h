@@ -12,7 +12,7 @@
 #ifndef __DXLIB_BACKEND_H__
 #define __DXLIB_BACKEND_H__
 
-#include "../basic/Platform.h"
+#include <Platform.h>
 
 #ifdef __cplusplus
 extern "C" {

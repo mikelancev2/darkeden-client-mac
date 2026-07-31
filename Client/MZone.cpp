@@ -25,6 +25,7 @@
 #include "MZoneTable.h"
 #include "CMessageArray.h"
 #include "DebugInfo.h"
+#include "DebugLog.h"	// re-include after DebugInfo.h: DebugInfo.h's DEBUG_ADD_FORMAT is a no-op ((void)0), and whichever header's #define comes last wins for the rest of this file - this makes sure the real (file-logging) one from DebugLog.h is active here.
 #include "ServerInfo.h"
 #include "Client.h"
 #include "EffectSpriteTypeDef.h"
@@ -3187,16 +3188,18 @@ MZone::RemoveCreature(TYPE_OBJECTID id)
 	// 서버좌표는 그냥 지워준다. 2002.3.29
 	UnSetServerBlock( pCreature->GetMoveType(), pCreature->GetServerX(), pCreature->GetServerY() );
 
-
-	// memory에서 제거 : Player가 아닐 경우에만 memory에서 제거
-	if (removed)
-	{
-		//UnSetServerBlock( pCreature->GetMoveType(), pCreature->GetServerX(), pCreature->GetServerY() );
-
-		delete pCreature;
-
-		m_mapCreature.erase(theIterator);
-	}			
+	// fix: free the creature and erase it from m_mapCreature unconditionally,
+	// even when the sector-level bookkeeping above failed to find it (a
+	// stale/desynced sector entry - e.g. from rapid movement near the
+	// player - is a separate, lower-severity issue). This used to be gated
+	// on "removed", so a creature whose sector membership had drifted out
+	// of sync was never actually freed: it became a permanent zombie entry
+	// in m_mapCreature that every frame's full-zone draw-order rebuild
+	// (MTopView::AddOutputCreatureAll) kept iterating forever, long after
+	// the real monster was gone - this is what caused FPS to permanently
+	// drop and never recover after fighting/standing near monsters.
+	delete pCreature;
+	m_mapCreature.erase(theIterator);
 
 	return removed;
 }

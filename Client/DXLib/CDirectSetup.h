@@ -6,7 +6,7 @@
 #define	__CDIRECTSETUP_H__
 
 /* Platform-independent includes (SDL2 backend on all platforms) */
-#include "../../basic/Platform.h"
+#include <Platform.h>
 
 //-----------------------------------------------------------------------------
 // Defines, constants, and global variables

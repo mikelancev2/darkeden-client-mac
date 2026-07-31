@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <Platform.h>
 
 // Get PrintInfo definition from Fl2.h
 #include "../hangul/Fl2.h"

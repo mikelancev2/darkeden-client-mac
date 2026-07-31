@@ -17,6 +17,7 @@ GCStatusCurrentHP::GCStatusCurrentHP()
 	__BEGIN_TRY
 	m_CurrentHP = 0;
 	m_ObjectID = 0;
+	m_bCritical = false;
 	__END_CATCH
 }
 
@@ -40,20 +41,25 @@ void GCStatusCurrentHP::read ( SocketInputStream & iStream )
 	iStream.read( m_ObjectID );
 	iStream.read( m_CurrentHP );
 
+	BYTE bCritical;
+	iStream.read( bCritical );
+	m_bCritical = (bCritical != 0);
+
 	__END_CATCH
 }
 
-		    
+
 //////////////////////////////////////////////////////////////////////
 // 출력스트림(버퍼)으로 패킷의 바이너리 이미지를 보낸다.
 //////////////////////////////////////////////////////////////////////
-void GCStatusCurrentHP::write ( SocketOutputStream & oStream ) const 
+void GCStatusCurrentHP::write ( SocketOutputStream & oStream ) const
      throw ( ProtocolException , Error )
 {
 	__BEGIN_TRY
-		
+
 	oStream.write( m_ObjectID );
 	oStream.write( m_CurrentHP );
+	oStream.write( (BYTE)(m_bCritical ? 1 : 0) );
 
 	__END_CATCH
 }

@@ -44,10 +44,18 @@ static inline int char_t_wcscmp(const char_t* s1, const wchar_t* s2) {
     return (*s2) ? -1 : (*s1 ? 1 : 0);
 }
 
-#define LOGIN_ID_X 59 // ��밪
-#define LOGIN_ID_Y 49
-#define LOGIN_PASSWORD_X 59
-#define LOGIN_PASSWORD_Y 89
+#define LOGIN_ID_X 45 // ��밪
+#define LOGIN_ID_Y 84
+#define LOGIN_PASSWORD_X 45
+#define LOGIN_PASSWORD_Y 143
+#define LOGIN_FIELD_WIDTH 238
+#define LOGIN_FIELD_HEIGHT 30
+#define LOGIN_OK_X 44
+#define LOGIN_OK_Y 178
+#define LOGIN_NEW_ID_X 174
+#define LOGIN_NEW_ID_Y 178
+#define LOGIN_BUTTON_WIDTH 112
+#define LOGIN_BUTTON_HEIGHT 34
 
 #define	MAX_SOUND_VOLUME		15
 #define	MAX_MUSIC_VOLUME		15
@@ -69,6 +77,88 @@ extern int		g_LeftPremiumDays;
 // add by sonic 2006.9.26
 extern	BOOL	g_MyFull;
 extern RECT g_GameRect;
+
+static void DrawTitleBackgroundLocked()
+{
+	static C_SPRITE_PACK titleBackground;
+	static bool opened = false;
+
+	if (!opened)
+	{
+		titleBackground.Open(g_MyFull ? SPK_TITLE_1024 : SPK_TITLE);
+		opened = true;
+	}
+
+	titleBackground.BltLocked(0, 0);
+}
+
+static void OpenDarkEdenClassicHomepage()
+{
+#ifdef PLATFORM_WINDOWS
+	char str[256];
+
+	GetWindowsDirectory(
+		str,  // address of buffer for Windows directory
+		255  // size of directory buffer
+	);
+
+	sprintf(str, "%s\\Explorer.exe", str);
+
+	CSDLGraphics::GetDD()->RestoreDisplayMode();
+	_spawnl(_P_NOWAIT, str, "Explorer.exe", "https://darkedenclassic.com/", NULL);
+#else
+	system("open \"https://darkedenclassic.com/\"");
+#endif
+}
+
+static int GetTitleSideMenuActionAtScreenPos(int screen_x, int screen_y)
+{
+	const int side_button_x = g_MyFull ? (g_GameRect.right-1024)/2+870 : (g_GameRect.right-800)/2+634;
+	const int side_button_hit_x = side_button_x - 16;
+	const int side_button_y[3] = {
+		g_MyFull ? (g_GameRect.bottom-768)/2+595 : (g_GameRect.bottom-600)/2+420,
+		g_MyFull ? (g_GameRect.bottom-768)/2+645 : (g_GameRect.bottom-600)/2+468,
+		g_MyFull ? (g_GameRect.bottom-768)/2+695 : (g_GameRect.bottom-600)/2+516
+	};
+
+	for (int i = 0; i < 3; ++i)
+	{
+		if (screen_x >= side_button_hit_x && screen_x < side_button_hit_x+180 &&
+			screen_y >= side_button_y[i]-8 && screen_y < side_button_y[i]+45)
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+static bool RunTitleSideMenuActionFromScreenPos(UINT message, int screen_x, int screen_y)
+{
+	const int action = GetTitleSideMenuActionAtScreenPos(screen_x, screen_y);
+	if (action < 0)
+	{
+		return false;
+	}
+
+	if (message == M_LEFTBUTTON_DOWN || message == M_LB_DOUBLECLICK)
+	{
+		switch (action)
+		{
+			case 0:
+				gC_vs_ui.RunOption(true);
+				break;
+			case 1:
+				OpenDarkEdenClassicHomepage();
+				break;
+			case 2:
+				gpC_base->SendMessage(UI_TERMINATION, 0, 0);
+				break;
+		}
+	}
+
+	return message == M_MOVING || message == M_LEFTBUTTON_DOWN || message == M_LEFTBUTTON_UP || message == M_LB_DOUBLECLICK;
+}
 /*
 //----------------------------------------------------------------------------
 // static
@@ -2406,6 +2496,7 @@ void C_VS_UI_NEWCHAR::Show()
 
 	if(gpC_base->m_p_DDSurface_back->Lock())
 	{
+		DrawTitleBackgroundLocked();
 		m_common_spk.BltLocked(0, 0);
 		
 		switch( m_p_slot->Race )
@@ -2912,13 +3003,7 @@ C_VS_UI_CHAR_MANAGER::C_VS_UI_CHAR_MANAGER()
 
 	AttrKeyboardControl(true);
 
-	// Debug: print class sizes
-	printf("DEBUG: sizeof(C_VS_UI_NEWCHAR)=%lu, sizeof(Window)=%lu, sizeof(Exec)=%lu, sizeof(ButtonVisual)=%lu\n",
-	       sizeof(C_VS_UI_NEWCHAR), sizeof(Window), sizeof(Exec), sizeof(ButtonVisual));
-
 	m_pC_newchar = new C_VS_UI_NEWCHAR;
-	printf("DEBUG: Allocated C_VS_UI_NEWCHAR at %p, expecting size %lu bytes\n",
-	       m_pC_newchar, sizeof(C_VS_UI_NEWCHAR));
 //	m_pC_char_info = NULL;
 	m_pC_char_delete = NULL;
 	m_pC_biling = NULL;
@@ -3395,7 +3480,7 @@ void C_VS_UI_CHAR_MANAGER::Show()
 	gpC_base->m_p_DDSurface_back->FillSurface(0);
 	if(gpC_base->m_p_DDSurface_back->Lock())
 	{
-//		m_title1_spk.BltLocked(0,0);
+		DrawTitleBackgroundLocked();
 		m_common_spk.BltLocked(x, y);
 		//	m_image_spk.BltLocked(300, 150);
 		m_image_spk.BltLocked(TITLE_X - m_image_spk.GetWidth(TITLE)/2, TITLE_Y, TITLE);
@@ -4040,7 +4125,7 @@ void C_VS_UI_SERVER_SELECT::Show()
 
 	if(gpC_base->m_p_DDSurface_back->Lock())
 	{
-//		m_title1_spk.BltLocked(0,0);
+		DrawTitleBackgroundLocked();
 		m_common_spk.BltLocked(x, y);
 		m_image_spk.BltLocked(300, 150);
 		
@@ -4215,18 +4300,18 @@ C_VS_UI_LOGIN::C_VS_UI_LOGIN()
 	m_pC_login_menu.Open(SPK_LOGIN_MENU);
 	if(g_MyFull)
 	{
-		Set(/*154, 180*/401, 293, m_pC_login_spk->GetWidth(), m_pC_login_spk->GetHeight());
+		Set((g_GameRect.right-1024)/2+64, (g_GameRect.bottom-768)/2+330, m_pC_login_spk->GetWidth(), m_pC_login_spk->GetHeight());
 	}
 	else
 	{
-		Set(/*154, 180*/400 - m_pC_login_spk->GetWidth()/2, 300 - m_pC_login_spk->GetHeight()/2-57, m_pC_login_spk->GetWidth(), m_pC_login_spk->GetHeight());
+		Set((g_GameRect.right-800)/2+48, (g_GameRect.bottom-600)/2+258, m_pC_login_spk->GetWidth(), m_pC_login_spk->GetHeight());
 	}
 
 	m_pC_button_group = new ButtonGroup(this);
 
-	m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(118, 123, m_pC_login_menu.GetWidth(NEW_ID), m_pC_login_menu.GetHeight(NEW_ID), NEW_ID, this, PUSHED_NEW_ID, 1));
-	m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(52, 123, m_pC_login_menu.GetWidth(OK), m_pC_login_menu.GetHeight(OK), OK, this, PUSHED_OK, 1));
-	m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(156, 28, m_pC_login_menu.GetWidth(CANCEL), m_pC_login_menu.GetHeight(CANCEL), CANCEL, this, PUSHED_CANCEL, 1));
+	m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(LOGIN_NEW_ID_X, LOGIN_NEW_ID_Y, m_pC_login_menu.GetWidth(NEW_ID), m_pC_login_menu.GetHeight(NEW_ID), NEW_ID, this, PUSHED_NEW_ID, 1));
+	m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(LOGIN_OK_X, LOGIN_OK_Y, m_pC_login_menu.GetWidth(OK), m_pC_login_menu.GetHeight(OK), OK, this, PUSHED_OK, 1));
+	m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(300, 20, m_pC_login_menu.GetWidth(CANCEL), m_pC_login_menu.GetHeight(CANCEL), CANCEL, this, PUSHED_CANCEL, 1));
 
 
 	// LineEditorVisual setting...
@@ -4241,6 +4326,8 @@ C_VS_UI_LOGIN::C_VS_UI_LOGIN()
 
 	Attach(&m_lev_id);
 	Attach(&m_lev_password);
+
+	m_fadeStartMs = 0;
 
 //	m_bFirst = true;
 }
@@ -4356,7 +4443,7 @@ void C_VS_UI_LOGIN::ShowButtonDescription(C_VS_UI_EVENT_BUTTON * p_button)
 
 void C_VS_UI_LOGIN::ShowButtonWidget(C_VS_UI_EVENT_BUTTON * p_button)
 {
-	if (p_button->GetFocusState() && p_button->GetPressState())
+	if (p_button->GetFocusState() || p_button->GetPressState())
 	{
 		m_pC_login_menu.BltLocked(x+p_button->x, y+p_button->y, p_button->m_image_index);
 	}
@@ -4408,6 +4495,8 @@ void C_VS_UI_LOGIN::Start()
 
 	gpC_window_manager->AppearWindow(this);
 	m_pC_button_group->Init();
+
+	m_fadeStartMs = 0; // (re-)arm the fade-in - actual clock starts on first Show(), see there
 
 	m_lev_id.Acquire();
 	m_lev_id.EraseAll();
@@ -4466,6 +4555,10 @@ void C_VS_UI_LOGIN::Run(id_t id)
 	switch (id)
 	{
 		case OK:
+			{
+				FILE* f = fopen("Log/ui_debug.log", "a");
+				if (f) { fprintf(f, "C_VS_UI_LOGIN::Run: case OK entered\n"); fclose(f); }
+			}
 			if (ReadySend() == true)
 			{
 				SendLoginToClient();
@@ -4477,13 +4570,10 @@ void C_VS_UI_LOGIN::Run(id_t id)
 			break;
 
 		case CANCEL:
-			Finish();
 			break;
 
 		case NEW_ID:
-			//g_msg_not_available_menu->Start();
-			Finish();
-			gpC_base->SendMessage(UI_RUN_NEWUSER_REGISTRATION);
+			OpenDarkEdenClassicHomepage();
 			break;
 	}
 }
@@ -4494,6 +4584,14 @@ void C_VS_UI_LOGIN::Run(id_t id)
 -----------------------------------------------------------------------------*/
 bool C_VS_UI_LOGIN::MouseControl(UINT message, int _x, int _y)
 {
+	const int screen_x = _x;
+	const int screen_y = _y;
+
+	if (RunTitleSideMenuActionFromScreenPos(message, screen_x, screen_y))
+	{
+		return true;
+	}
+
 	Window::MouseControl(message, _x, _y);
 	_x-=x; _y-=y;
 
@@ -4504,8 +4602,8 @@ bool C_VS_UI_LOGIN::MouseControl(UINT message, int _x, int _y)
 		case M_LEFTBUTTON_DOWN:
 		case M_LB_DOUBLECLICK:
 			{
-				Rect id_rt(LOGIN_ID_X, LOGIN_ID_Y, 130, 23);
-				Rect pass_rt(LOGIN_PASSWORD_X, LOGIN_PASSWORD_Y, 130, 23);
+				Rect id_rt(LOGIN_ID_X, LOGIN_ID_Y, LOGIN_FIELD_WIDTH, LOGIN_FIELD_HEIGHT);
+				Rect pass_rt(LOGIN_PASSWORD_X, LOGIN_PASSWORD_Y, LOGIN_FIELD_WIDTH, LOGIN_FIELD_HEIGHT);
 
 				// Debug output
 /*
@@ -4587,6 +4685,10 @@ bool C_VS_UI_LOGIN::NextFocus()
 //-----------------------------------------------------------------------------
 void C_VS_UI_LOGIN::SendLoginToClient()
 {
+	{
+		FILE* f = fopen("Log/ui_debug.log", "a");
+		if (f) { fprintf(f, "SendLoginToClient: enter, id_size=%d pw_size=%d\n", m_lev_id.Size(), m_lev_password.Size()); fclose(f); }
+	}
 	// copy from input line.
 /*	if (m_e_ip == ID)
 	{
@@ -4606,14 +4708,34 @@ void C_VS_UI_LOGIN::SendLoginToClient()
 	S_login.sz_id = (char*)malloc(128);
 	S_login.sz_password = (char*)malloc(128);
 
+	{
+		FILE* f = fopen("Log/ui_debug.log", "a");
+		if (f) { fprintf(f, "SendLoginToClient: before id convert\n"); fclose(f); }
+	}
 	// Convert from LineEditor (UTF-32/char_t) to single-byte char strings
 	g_Convert_DBCS_Ascii2SingleByte(m_lev_id.GetStringWide(), m_lev_id.Size(), S_login.sz_id);
+	{
+		FILE* f = fopen("Log/ui_debug.log", "a");
+		if (f) { fprintf(f, "SendLoginToClient: after id convert, before pw convert\n"); fclose(f); }
+	}
 	g_Convert_DBCS_Ascii2SingleByte(m_lev_password.GetStringWide(), m_lev_password.Size(), S_login.sz_password);
+	{
+		FILE* f = fopen("Log/ui_debug.log", "a");
+		if (f) { fprintf(f, "SendLoginToClient: after pw convert\n"); fclose(f); }
+	}
 
 	// Safety check: ensure conversion succeeded before using the pointers
 	if (S_login.sz_id != NULL && S_login.sz_password != NULL) {
 		strcpy(g_pUserOption->BackupID, S_login.sz_id);
+		{
+			FILE* f = fopen("Log/ui_debug.log", "a");
+			if (f) { fprintf(f, "SendLoginToClient: before SendMessage UI_LOGIN\n"); fclose(f); }
+		}
 		gpC_base->SendMessage(UI_LOGIN, 0, 0, &S_login);
+		{
+			FILE* f = fopen("Log/ui_debug.log", "a");
+			if (f) { fprintf(f, "SendLoginToClient: after SendMessage UI_LOGIN\n"); fclose(f); }
+		}
 	}
 }
 
@@ -4717,7 +4839,7 @@ void C_VS_UI_LOGIN::KeyboardControl(UINT message, UINT key, long extra)
 			}
 			else if (key == VK_ESCAPE) // cancel!
 			{
-				Finish();
+				// The renewed title screen keeps the login panel permanently visible.
 			}
 			else if (key == VK_RETURN) // ok
 			{
@@ -4754,10 +4876,86 @@ void C_VS_UI_LOGIN::Show()
 //	}
 
 //	m_pC_login_spk->BltAlpha(x, y+20, SHADOW, 22);
+	{
+		static bool s_bLoggedOnce = false;
+		if (!s_bLoggedOnce)
+		{
+			s_bLoggedOnce = true;
+			FILE* f = fopen("Log/ui_debug.log", "a");
+			if (f)
+			{
+				fprintf(f, "C_VS_UI_LOGIN::Show first call: x=%d y=%d spk_w=%d spk_h=%d locked=%d\n",
+					x, y, m_pC_login_spk->GetWidth(), m_pC_login_spk->GetHeight(),
+					gpC_base->m_p_DDSurface_back->IsLock());
+				fclose(f);
+			}
+		}
+	}
 	if(gpC_base->m_p_DDSurface_back->Lock())
 	{
-		m_pC_login_spk->BltLocked(x, y);		
+		// Fade the login panel in over its first ~500ms instead of popping
+		// in instantly on top of the title screen. Time-based, not frame-
+		// counted: with vsync off this can run at 200+ fps, where a fixed
+		// frame-count ramp finishes too fast to read as a fade at all.
+		// The clock starts on the first actual Show() call, not Start() -
+		// Start() can run well before this screen is first drawn (it's
+		// invoked synchronously from C_VS_UI_TITLE::Start()), so anchoring
+		// the fade there meant the 500ms window had often already silently
+		// elapsed by the time this was first visible on screen.
+		if (m_fadeStartMs == 0)
+		{
+			m_fadeStartMs = GetTickCount();
+			if (m_fadeStartMs == 0) m_fadeStartMs = 1; // 0 is the "unarmed" sentinel
+		}
+		const DWORD LOGIN_FADE_MS = 500;
+		DWORD fadeElapsed = GetTickCount() - m_fadeStartMs;
+		if (fadeElapsed < LOGIN_FADE_MS)
+		{
+			int fadeAlpha = 255 * (int)fadeElapsed / (int)LOGIN_FADE_MS;
+			m_pC_login_spk->BltLockedAlpha(x, y, 0, fadeAlpha);
+		}
+		else
+		{
+			m_pC_login_spk->BltLocked(x, y);
+		}
 		m_pC_button_group->Show();
+
+		const int mx = gpC_mouse_pointer->GetX() - x;
+		const int my = gpC_mouse_pointer->GetY() - y;
+
+		S_SURFACEINFO surfaceinfo;
+		SetSurfaceInfo(&surfaceinfo, gpC_base->m_p_DDSurface_back->GetDDSD());
+		if (mx >= LOGIN_OK_X && mx < LOGIN_OK_X+LOGIN_BUTTON_WIDTH && my >= LOGIN_OK_Y && my < LOGIN_OK_Y+LOGIN_BUTTON_HEIGHT)
+		{
+			rectangle(&surfaceinfo, x+LOGIN_OK_X+1, y+LOGIN_OK_Y+1, x+LOGIN_OK_X+LOGIN_BUTTON_WIDTH-2, y+LOGIN_OK_Y+LOGIN_BUTTON_HEIGHT-2, LIGHTRED);
+			rectangle(&surfaceinfo, x+LOGIN_OK_X+2, y+LOGIN_OK_Y+2, x+LOGIN_OK_X+LOGIN_BUTTON_WIDTH-3, y+LOGIN_OK_Y+LOGIN_BUTTON_HEIGHT-3, RED);
+		}
+		if (mx >= LOGIN_NEW_ID_X && mx < LOGIN_NEW_ID_X+LOGIN_BUTTON_WIDTH && my >= LOGIN_NEW_ID_Y && my < LOGIN_NEW_ID_Y+LOGIN_BUTTON_HEIGHT)
+		{
+			rectangle(&surfaceinfo, x+LOGIN_NEW_ID_X+1, y+LOGIN_NEW_ID_Y+1, x+LOGIN_NEW_ID_X+LOGIN_BUTTON_WIDTH-2, y+LOGIN_NEW_ID_Y+LOGIN_BUTTON_HEIGHT-2, LIGHTRED);
+			rectangle(&surfaceinfo, x+LOGIN_NEW_ID_X+2, y+LOGIN_NEW_ID_Y+2, x+LOGIN_NEW_ID_X+LOGIN_BUTTON_WIDTH-3, y+LOGIN_NEW_ID_Y+LOGIN_BUTTON_HEIGHT-3, RED);
+		}
+
+		// Side link buttons (Option/Homepage/Exit) - hand hit-tested in screen
+		// space, same as client-master; these aren't part of m_pC_button_group.
+		const int side_mx = gpC_mouse_pointer->GetX();
+		const int side_my = gpC_mouse_pointer->GetY();
+		const int side_button_x = g_MyFull ? (g_GameRect.right-1024)/2+870 : (g_GameRect.right-800)/2+634;
+		const int side_button_hit_x = side_button_x - 16;
+		const int side_button_y[3] = {
+			g_MyFull ? (g_GameRect.bottom-768)/2+595 : (g_GameRect.bottom-600)/2+420,
+			g_MyFull ? (g_GameRect.bottom-768)/2+645 : (g_GameRect.bottom-600)/2+468,
+			g_MyFull ? (g_GameRect.bottom-768)/2+695 : (g_GameRect.bottom-600)/2+516
+		};
+		for (int i = 0; i < 3; ++i)
+		{
+			if (side_mx >= side_button_hit_x && side_mx < side_button_hit_x+180 && side_my >= side_button_y[i]-8 && side_my < side_button_y[i]+45)
+			{
+				rectangle(&surfaceinfo, side_button_x+1, side_button_y[i]+1, side_button_x+140, side_button_y[i]+35, LIGHTRED);
+				rectangle(&surfaceinfo, side_button_x+2, side_button_y[i]+2, side_button_x+139, side_button_y[i]+34, RED);
+			}
+		}
+
 		gpC_base->m_p_DDSurface_back->Unlock();
 	}
 /*
@@ -4928,6 +5126,8 @@ C_VS_UI_TITLE::C_VS_UI_TITLE()
 	// set Window size
 	Set(0, 0, m_title_spk.GetWidth(), m_title_spk.GetHeight());
 
+	m_bgFadeStartMs = 0; // arm fade-in for m_title_spk, see Show()
+
   	// ani objects
 //	m_pC_ao_title = new C_ANI_OBJECT(SPK_ANI_TITLE, FRR_ANI_TITLE);
 //	m_pC_ao_symbol = new C_ANI_OBJECT(SPK_ANI_SYMBOL, FRR_ANI_SYMBOL);
@@ -4943,6 +5143,7 @@ C_VS_UI_TITLE::C_VS_UI_TITLE()
 	
 	const InterfaceInformation *pSkin = &g_pSkinManager->Get( SkinManager::TITLE );
 	m_pC_button_group = new ButtonGroup(this);
+#if 0
 	if(g_MyFull)
 	{
 		//��½���水ť��ʾ
@@ -4958,6 +5159,7 @@ C_VS_UI_TITLE::C_VS_UI_TITLE()
 		m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(x+673, y+467, m_title_menu_default.GetWidth(CREDIT_HILIGHT), m_title_menu_default.GetHeight(CREDIT_HILIGHT), CREDIT, this,CREDIT_HILIGHT));
 		m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(x+673, y+515, m_title_menu_default.GetWidth(EXIT_HILIGHT), m_title_menu_default.GetHeight(EXIT_HILIGHT), EXIT, this,EXIT_HILIGHT));
 	}
+#endif
 
 	//	m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(324+17, 278, m_title_menu_default.GetWidth(TUTORIAL), m_title_menu_default.GetHeight(TUTORIAL), TUTORIAL, this));
 //	m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(347+17, 319, m_title_menu_default.GetWidth(INTRO), m_title_menu_default.GetHeight(INTRO), INTRO, this));
@@ -5136,6 +5338,11 @@ void C_VS_UI_TITLE::WindowEventReceiver(id_t event)
 {
 }
 
+bool C_VS_UI_TITLE::TryRunSideMenuAction(UINT message, int screen_x, int screen_y)
+{
+	return RunTitleSideMenuActionFromScreenPos(message, screen_x, screen_y);
+}
+
 //-----------------------------------------------------------------------------
 // IsPixel
 //
@@ -5143,6 +5350,11 @@ void C_VS_UI_TITLE::WindowEventReceiver(id_t event)
 //-----------------------------------------------------------------------------
 bool C_VS_UI_TITLE::IsPixel(int _x, int _y)
 {
+	if (GetTitleSideMenuActionAtScreenPos(_x, _y) >= 0)
+	{
+		return true;
+	}
+
 	return m_title_spk.IsPixel(SCR2WIN_X(_x), SCR2WIN_Y(_y));
 }
 
@@ -5174,21 +5386,19 @@ void C_VS_UI_TITLE::Start()
 	PI_Processor::Start();
 
 	m_pC_char_manager->Finish();
+	m_pC_login->Finish();
 	m_pC_server_select->Finish();
 //	m_pC_newuser->Finish();
 
 	gpC_window_manager->AppearWindow(this);
 	m_pC_button_group->Init();
+	m_pC_login->Start();
+
+	m_bgFadeStartMs = 0; // re-arm background fade-in each time this screen (re)starts
 
 	g_descriptor_manager.Unset();
 
 	g_eRaceInterface = RACE_SLAYER;
-
-	// Start login window so text boxes are active
-	if (m_pC_login != NULL)
-	{
-//		m_pC_login->Start();
-	}
 
 #ifndef _LIB
 	//m_pC_dialog->Start();
@@ -5215,15 +5425,19 @@ void C_VS_UI_TITLE::Finish()
 //-----------------------------------------------------------------------------
 void C_VS_UI_TITLE::ShowButtonWidget(C_VS_UI_EVENT_BUTTON * p_button)
 {
-	// Always show button - fix for SDL2 port (buttons were invisible initially)
-	if (p_button->GetPressState())
-		m_title_menu_default.BltLocked(p_button->x, p_button->y, (p_button->m_image_index)+1);
+	// Side menu buttons are baked into the renewed title background and
+	// highlighted manually by C_VS_UI_LOGIN::Show(). Drawing the old SPK
+	// hover sprites here creates a second misaligned button on top.
+	return;
+
+	// The default (idle) button art is already baked into the title
+	// background image (Title_1024.spk) - only draw an overlay here for
+	// the focused/pressed states, same as the original client.
+	if(p_button->GetPressState())
+		m_title_menu_select.BltLocked(p_button->x, p_button->y, p_button->GetID());
 	else if (p_button->GetFocusState())
-		m_title_menu_default.BltLocked(p_button->x, p_button->y, (p_button->m_image_index));
-	else
-		// Default state - show button even when not focused/pressed
-		m_title_menu_default.BltLocked(p_button->x, p_button->y, (p_button->m_image_index));
-	
+		m_title_menu_select.BltLocked(p_button->x, p_button->y, p_button->GetID());
+
 //	if (p_button->GetFocusState() && p_button->GetPressState())
 //	{
 //		m_title_menu_select.BltLocked(p_button->x, p_button->y, p_button->GetID());
@@ -5307,8 +5521,33 @@ void C_VS_UI_TITLE::Show()
 		}
 		else
 		{
-			m_title_spk.BltLocked();
-			
+			// Without this clear, BltLocked()'s implicit (0,0) draw leaves
+			// stale backbuffer content around the title art on startup -
+			// visible as a brief garbage/pink flash before the first real frame.
+			gpC_base->m_p_DDSurface_back->FillSurface(0);
+
+			// Fade this background in over its first ~500ms instead of
+			// popping in hard - this is the screen that replaces the
+			// startup loading-sprite splash (which has its own, separate,
+			// already-completed fade by the time this first draws), so it
+			// needs an independent timer, not a shared/global one.
+			if (m_bgFadeStartMs == 0)
+			{
+				m_bgFadeStartMs = GetTickCount();
+				if (m_bgFadeStartMs == 0) m_bgFadeStartMs = 1;
+			}
+			const DWORD BG_FADE_MS = 1200;
+			DWORD bgFadeElapsed = GetTickCount() - m_bgFadeStartMs;
+			if (bgFadeElapsed < BG_FADE_MS)
+			{
+				int bgFadeAlpha = 255 * (int)bgFadeElapsed / (int)BG_FADE_MS;
+				m_title_spk.BltLockedAlpha(x, y, 0, bgFadeAlpha);
+			}
+			else
+			{
+				m_title_spk.BltLocked(x, y);
+			}
+
 			//if(!gC_vs_ui.IsRunningOption())
 			//add by zdj				
 				//DrawTitleEffect();
@@ -5394,6 +5633,11 @@ bool C_VS_UI_TITLE::MouseControl(UINT message, int _x, int _y)
 			EMPTY_MOVE;
 		}
 
+		return true;
+	}
+
+	if (RunTitleSideMenuActionFromScreenPos(message, _x, _y))
+	{
 		return true;
 	}
 
@@ -5499,28 +5743,7 @@ void C_VS_UI_TITLE::Run(id_t id)
 			//m_credit_scroll = -400;
 
 
-#ifdef PLATFORM_WINDOWS
-			char str[256];
-
-			GetWindowsDirectory(
-				str,  // address of buffer for Windows directory
-				255        // size of directory buffer
-			);
-
-			sprintf(str, "%s\\Explorer.exe", str);
-
-			CSDLGraphics::GetDD()->RestoreDisplayMode();
-
-			_spawnl(_P_NOWAIT, str, "Explorer.exe", "http://www.ttdk2.com", NULL);
-
-			//_spawnl(_P_NOWAIT, str, "Explorer.exe", g_pClientConfig->URL_HOMEPAGE_NEW_USER.GetString(), NULL);
-#else
-			// macOS: Use system() to open URL
-			system("open \"http://www.ttdk2.com\"");
-#endif
-
-
-
+			OpenDarkEdenClassicHomepage();
 			break;
 
 		case EXIT:

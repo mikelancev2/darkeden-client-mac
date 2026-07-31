@@ -10,6 +10,8 @@ Makefile
 
 # Build directory
 build/
+build-win/
+*.log
 
 # macOS
 .DS_Store

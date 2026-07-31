@@ -34,8 +34,13 @@ set(SPRITELIB_SOURCES
 	SpriteLibBackendSDL.cpp
 
 	# SDL-specific CSpriteSurface implementation
+	# NOTE: CSpriteSurface_Adapter.cpp is NOT listed here on purpose - it is
+	# #include'd directly by CSpriteSurface_SDL.cpp (see the comment at the
+	# top of that file). Listing it here too compiles it as its own
+	# translation unit as well, producing duplicate-symbol LNK2005 errors
+	# for every method it defines the moment its stale cached .obj gets
+	# invalidated and a fresh one is linked alongside CSpriteSurface_SDL.obj.
 	CSpriteSurface_SDL.cpp
-	CSpriteSurface_Adapter.cpp
 	CSpriteSurface_Effects.cpp
 
 	# SDL-specific CSprite implementation

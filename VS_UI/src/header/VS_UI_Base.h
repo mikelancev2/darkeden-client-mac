@@ -9,6 +9,10 @@
 #ifndef __VS_UI_BASE_H__
 #define __VS_UI_BASE_H__
 
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#endif
+
 #include "BasicS.h"
 #include "DLL.h"
 #include "GL_import.h"
@@ -280,6 +284,7 @@ public:
 	PrintInfo				m_money_pi;
 	PrintInfo				m_char_value_pi;
 	PrintInfo				m_char_chat_large_pi;
+	PrintInfo				m_damage_number_pi;	// floating damage number font (MTopView::DrawCreatureHPModify)
 	
 	// use by Client
 	PrintInfo				m_chat_dialog_pi;

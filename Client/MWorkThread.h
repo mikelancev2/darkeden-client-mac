@@ -51,17 +51,27 @@
 #ifndef __MWORKTHREAD_H__
 #define	__MWORKTHREAD_H__
 
-#include "../basic/Platform.h"
+#include <Platform.h>
 
 // Type definitions for thread function pointer (Windows API compatibility)
 typedef DWORD (*LPTHREAD_START_ROUTINE)(void* lpParameter);
 
 // Thread priority constants (Windows API compatibility)
+#ifndef THREAD_PRIORITY_NORMAL
 #define THREAD_PRIORITY_NORMAL          0
+#endif
+#ifndef THREAD_PRIORITY_ABOVE_NORMAL
 #define THREAD_PRIORITY_ABOVE_NORMAL    1
+#endif
+#ifndef THREAD_PRIORITY_BELOW_NORMAL
 #define THREAD_PRIORITY_BELOW_NORMAL   -1
+#endif
+#ifndef THREAD_PRIORITY_HIGHEST
 #define THREAD_PRIORITY_HIGHEST          2
+#endif
+#ifndef THREAD_PRIORITY_LOWEST
 #define THREAD_PRIORITY_LOWEST          -2
+#endif
 
 // Wait constants (Windows API compatibility)
 #define WAIT_OBJECT_0                   0
@@ -76,11 +86,13 @@ static inline DWORD WaitForSingleObject(HANDLE event, DWORD timeout) {
     return WAIT_TIMEOUT;
 }
 
-// Stub for SetThreadPriority (not implemented on mingw/macOS)
+#ifndef PLATFORM_SET_THREAD_PRIORITY_DEFINED
+#define PLATFORM_SET_THREAD_PRIORITY_DEFINED
 static inline BOOL SetThreadPriority(HANDLE thread, int priority) {
     (void)thread; (void)priority;
     return TRUE;
 }
+#endif
 
 #include <deque>
 #include "MWorkNode.h"

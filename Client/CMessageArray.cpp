@@ -12,7 +12,7 @@
 #define __LOGGING__
 
 // Platform-specific includes
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
 	#include <io.h>
 	#include <fcntl.h>
 #else
@@ -21,7 +21,7 @@
 #endif
 
 // Platform-specific I/O functions
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
 	#define PLATFORM_WRITE(fd, buf, len)	_write(fd, buf, len)
 	#define PLATFORM_OPEN	_open
 	#define PLATFORM_CLOSE	_close
@@ -34,7 +34,7 @@
 #endif
 
 // Platform-specific file flags
-#ifndef PLATFORM_WINDOWS
+#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_WIN32_HOST)
 	#define _O_WRONLY    O_WRONLY
 	#define _O_TEXT      0
 	#define _O_APPEND    O_APPEND
@@ -167,14 +167,14 @@ CMessageArray::Release()
 //----------------------------------------------------------------------
 // String을 추가한다. 끝에~..
 //----------------------------------------------------------------------
-void		
+void
 CMessageArray::Add(const char *str)
-{	
+{
 	#ifndef __LOGGING__
 		return;
 	#endif
 
-	__BEGIN_LOCK	
+	__BEGIN_LOCK
 
 	int len = strlen(str);
 	

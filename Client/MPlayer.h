@@ -95,36 +95,52 @@ class Comparison {
 		// true : right를 선택한다.
 		// false : left를 선택한다.
 		bool operator () (DNode * left, DNode * right) const
-		{ 
-			int diff = left->distance - right->distance;			
+		{
+			int diff = left->distance - right->distance;
 			int s = left->step - right->step;
 
 			// 거리가(diff) 같은 경우..
 			if (diff==0)
-			{			
+			{
 				// 움직인 회수가 같은 경우
 				if (s==0)
 				{
+					// fix: this used to look only at `right`'s own parent/direction
+					// match, regardless of which argument was passed as `right` -
+					// so comp(A,B) and comp(B,A) could both return true (both "A
+					// continues straight" and "B continues straight" can hold at
+					// once), violating strict-weak-ordering. MSVC's debug STL
+					// (_Debug_lt_pred) catches this and asserts/crashes in Debug
+					// builds; in Release it's silent UB that could still corrupt
+					// the priority_queue's heap invariant. Compare each side's
+					// own straightness symmetrically instead.
 					if (left->pParent!=NULL && right->pParent!=NULL)
 					{
-						if (right->pParent->direction == right->direction)
+						bool leftStraight = (left->pParent->direction == left->direction);
+						bool rightStraight = (right->pParent->direction == right->direction);
+
+						if (rightStraight && !leftStraight)
 						{
 							return true;	// right선택
 						}
-						
-						return false;	// left선택						
+						if (leftStraight && !rightStraight)
+						{
+							return false;	// left선택
+						}
 					}
+
+					return false;
 				}
 				// 움직인 회수가 적은 것
-				else if (s>0) 
+				else if (s>0)
 				{
 					return true;
 				}
-				
-				return false;				
-			}			
+
+				return false;
+			}
 			// 거리가 적은 것
-			else if (diff>0) return true; 
+			else if (diff>0) return true;
 
 			return false;
 		}
@@ -299,7 +315,7 @@ class MPlayer : public MCreatureWear, public MRequestMode {
 		//----------------------------------------------------------
 		// 상태 값 바꾸기
 		//----------------------------------------------------------
-		void	SetStatus(DWORD n, DWORD value);
+		void	SetStatus(DWORD n, DWORD value, bool bCritical = false);
 		void	CalculateStatus();
 		
 		void	CalculateSight();

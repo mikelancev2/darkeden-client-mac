@@ -5,7 +5,7 @@
 // Disabled assert for macOS
 #include "VS_UI_Base.h"
 // GDI removed (SDL2) - All platforms use TextSystem (SDL + freetype2)
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #include "TextSystem/FontHandleUtil.h"
 extern RECT g_GameRect;
 //----------------------------------------------------------------------------
@@ -307,6 +307,15 @@ void Base::InitFont()
 	lf.lfWeight = FW_BOLD;
 	strcpy(lf.lfFaceName, szFontName[3][Language]);
 	SetFont( m_char_chat_large_pi, lf, RGB(255,255,255));
+
+	// Dedicated font for the floating damage number (MTopView::
+	// DrawCreatureHPModify) - bigger/bolder than any other PI. The real
+	// color is passed directly to g_PrintColorStrOut, this is just fallback.
+	SetDefaultLogfont(lf);
+	lf.lfHeight = 26;
+	lf.lfWeight = FW_BOLD;
+	strcpy(lf.lfFaceName, szFontName[3][Language]);
+	SetFont( m_damage_number_pi, lf, RGB(255,20,20));
 
 	// new style...
 	SetDefaultLogfont(lf);

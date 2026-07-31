@@ -18,10 +18,14 @@
 
 #pragma warning(disable:4786)
 
-#ifdef PLATFORM_WINDOWS
-	#include <Windows.h>
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-	#include "../../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+	#include <Platform.h>
 	#include <pthread.h>
 #endif
 #include <list>

@@ -4,6 +4,8 @@
 
 #include "FL2.h"
 #include "VS_UI_Base.h"
+#include "../../../Client/TextSystem/TextService.h"
+#include "../../../Client/TextSystem/FontHandleUtil.h"
 
 //-----------------------------------------------------------------------------
 // Utilities for IO.
@@ -91,29 +93,22 @@ bool g_PossibleStringCut(const char * sz_str, int position)
 //-----------------------------------------------------------------------------
 int g_GetStringWidth(const char * sz_str, HFONT hfont)
 {
-	assert(!gpC_base->m_p_DDSurface_back->IsLock());
-	if (gpC_fl2_surface == NULL)
-		_Error(NULL_REF);
-
+	// Rewritten to use TextSystem (SDL_ttf) instead of a real GDI HDC obtained
+	// from a legacy DirectDraw7 surface (gpC_fl2_surface). That real GDI path
+	// was found to be the root cause of a progressive FPS decay: mixing legacy
+	// DirectDraw calls with the SDL2 renderer on the same window got steadily
+	// more expensive the longer the process ran (called on every chat-window
+	// Show(), even fully idle), while GDI/USER object counts stayed flat -
+	// so it wasn't a handle leak, just an increasingly costly cross-API call.
 	if (sz_str == NULL)
 		return 0;
 
-	HDC hdc;
+	int fontSize = TextSystem::DecodeFontSizeHandle(hfont);
+	TextSystem::TextStyle style = TextSystem::TextService::Get().GetDefaultStyle();
+	style.font = TextSystem::TextService::Get().GetFont(fontSize);
 
-	bool bGetDC = g_FL2_GetDC();
-
-	hdc = gh_FL2_DC;
-	
-	if (hfont != NULL)
-		SelectObject(hdc, hfont);
-
-	SIZE size;
-	GetTextExtentPoint32(hdc, sz_str, strlen(sz_str), &size);
-
-	if(bGetDC)
-		g_FL2_ReleaseDC();
-
-	return size.cx;
+	TextSystem::Metrics metrics = TextSystem::TextService::Get().MeasureText(sz_str, style);
+	return metrics.width;
 }
 
 //-----------------------------------------------------------------------------
@@ -126,30 +121,17 @@ int g_GetStringWidth(const char * sz_str, HFONT hfont)
 //-----------------------------------------------------------------------------
 int g_GetStringHeight(const char * sz_str, HFONT hfont)
 {
-	assert(!gpC_base->m_p_DDSurface_back->IsLock());
-	if (gpC_fl2_surface == NULL)
-		_Error(NULL_REF);
-
+	// See g_GetStringWidth: rewritten to use TextSystem instead of legacy
+	// DirectDraw-backed GDI, which was the root cause of a progressive FPS decay.
 	if (sz_str == NULL)
 		return 0;
-	
-	HDC hdc;
 
-	bool bGetDC = g_FL2_GetDC();
+	int fontSize = TextSystem::DecodeFontSizeHandle(hfont);
+	TextSystem::TextStyle style = TextSystem::TextService::Get().GetDefaultStyle();
+	style.font = TextSystem::TextService::Get().GetFont(fontSize);
 
-	hdc = gh_FL2_DC;
-	
-	
-	if (hfont != NULL)
-		SelectObject(hdc, hfont);
-
-	SIZE size;
-	GetTextExtentPoint32(hdc, sz_str, strlen(sz_str), &size);
-
-	if(bGetDC)
-		g_FL2_ReleaseDC();
-
-	return size.cy;
+	TextSystem::Metrics metrics = TextSystem::TextService::Get().MeasureText(sz_str, style);
+	return metrics.height;
 }
 
 //-----------------------------------------------------------------------------

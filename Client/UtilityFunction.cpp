@@ -6,7 +6,7 @@
 
 #include "UtilityFunction.h"
 
-#ifndef PLATFORM_WINDOWS
+#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_WIN32_HOST)
 #include <sys/statvfs.h>
 #endif
 #include <SDL_image.h>
@@ -590,6 +590,47 @@ SaveSurfaceToImage(const char* pFilename, CDirectDrawSurface& surface)
 /////////////////////////////////////////////////////////////////////////////
 // CBaseImage
 
+#ifdef PLATFORM_USE_SDL
+bool LoadJPG(LPCTSTR lpszFileName, int &width, int &height, int &bpp, unsigned char** p_data)
+{
+	if (lpszFileName == NULL || p_data == NULL)
+		return false;
+
+	SDL_Surface* loaded = IMG_Load(lpszFileName);
+	if (loaded == NULL)
+		return false;
+
+	SDL_Surface* converted = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGB24, 0);
+	SDL_FreeSurface(loaded);
+	if (converted == NULL)
+		return false;
+
+	width = converted->w;
+	height = converted->h;
+	bpp = 3;
+	*p_data = new unsigned char[width * height * bpp];
+
+	for (int y = 0; y < height; ++y)
+	{
+		memcpy(*p_data + y * width * bpp,
+			   static_cast<unsigned char*>(converted->pixels) + y * converted->pitch,
+			   width * bpp);
+	}
+
+	SDL_FreeSurface(converted);
+	return true;
+}
+
+bool SaveJPG(LPCTSTR lpszFileName, int &width, int &height, int &bpp, unsigned char* p_data)
+{
+	(void)lpszFileName;
+	(void)width;
+	(void)height;
+	(void)bpp;
+	(void)p_data;
+	return false;
+}
+#else
 extern "C" {
 #include "jpegLib/jpeglib.h"
 }
@@ -927,6 +968,7 @@ bool SaveJPG(LPCTSTR lpszFileName, int &width, int &height, int &bpp, unsigned c
 	/* And we're done! */
   return TRUE;
 }
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -937,7 +979,7 @@ bool SaveJPG(LPCTSTR lpszFileName, int &width, int &height, int &bpp, unsigned c
 unsigned long
 GetDiskFreeSpace(const char* pDrive)
 {
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) && !defined(PLATFORM_USE_SDL)
 	DWORD dwSectorsPerCluster;
 	DWORD dwBytesPerSector;
 	DWORD dwNumberOfFreeClusters;
@@ -954,6 +996,9 @@ GetDiskFreeSpace(const char* pDrive)
 	//DWORD totalBytes = dwTotalNumberOfClusters * bytesPerCluster;
 
 	return freeBytes;
+#elif defined(PLATFORM_WIN32_HOST)
+	(void)pDrive;
+	return 1024UL * 1024UL * 1024UL;
 #else
 	// macOS/Linux implementation using statvfs
 	struct statvfs buf;

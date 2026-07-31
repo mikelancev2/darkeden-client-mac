@@ -4,7 +4,7 @@
 #ifdef PLATFORM_WINDOWS
 #include <wtypes.h>
 #else
-#include "../basic/Platform.h"  // For UINT and other basic types
+#include <Platform.h>  // For UINT and other basic types
 #endif
 #include "bit_res.h"
 

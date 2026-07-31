@@ -2,10 +2,14 @@
 #define __CTYPEPACK_H__
 
 #ifdef PLATFORM_WINDOWS
-	#include <windows.h>
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <windows.h>
+#endif
 	#include <fstream.h>
 #else
-	#include "../basic/Platform.h"
+	#include <Platform.h>
 	#include <fstream>
 	#include <cstring>
 	#include <cstdio>
@@ -232,14 +236,18 @@ bool CTypePack<Type>::LoadFromFileRunning(LPCTSTR lpszFilename)
 	}
 	indexFile.close();
 	
-	// file���� sprite ������ �о�´�.	
+	// file���� sprite ������ �о�´�.
 	m_file->open(lpszFilename, ios::binary);
-	
-	m_file->read((char*)&m_Size, 2);
-	
+
+	// See CTypePack2::LoadFromFileRunning: don't let the data file's own
+	// leading count overwrite m_Size, which already holds the authoritative
+	// count from the index file used to size m_pData/m_file_index above.
+	WORD dataFileSpriteCount = 0;
+	m_file->read((char*)&dataFileSpriteCount, 2);
+
 	m_bRunningLoad = true;
 	m_nLoadData = 0;
-	
+
 	return true;
 }
 
@@ -557,8 +565,6 @@ TypeBase &CTypePack2<TypeBase, Type1, Type2>::Get(WORD n)
 		// Validate sprite index
 		if (n >= m_Size)
 		{
-			printf("WARNING Get[%d]: this=%p, sprite index %d out of range (size=%d)\n",
-			       n, this, n, m_Size);
 			m_bRunningLoad = false;
 			return m_pData[n];
 		}
@@ -572,8 +578,6 @@ TypeBase &CTypePack2<TypeBase, Type1, Type2>::Get(WORD n)
 			// Check if file stream is valid before using it
 			if (!m_file->good())
 			{
-				printf("WARNING Get[%d]: this=%p, m_file=%p is not good(), disabling lazy loading\n",
-				       n, this, m_file);
 				m_bRunningLoad = false;
 				return m_pData[n];
 			}
@@ -583,7 +587,6 @@ TypeBase &CTypePack2<TypeBase, Type1, Type2>::Get(WORD n)
 		catch (...)
 		{
 			// File operation failed, disable lazy loading
-			printf("WARNING: Failed to load sprite %d from file, disabling lazy loading\n", n);
 			m_bRunningLoad = false;
 			return m_pData[n];
 		}
@@ -710,7 +713,14 @@ bool CTypePack2<TypeBase, Type1, Type2>::LoadFromFileRunning(LPCTSTR lpszFilenam
 		return false;
 	}
 
-	m_file->read((char*)&m_Size, 2);
+	// NOTE: the data file repeats the sprite count as its own leading WORD.
+	// Read it into a throwaway variable rather than m_Size - m_Size already
+	// holds the authoritative count from the index file (used to size
+	// m_pData/m_file_index above), and some regenerated/edited .spk files
+	// write 0 here, which previously clobbered m_Size and made Get()'s
+	// "n >= m_Size" bounds check reject every valid sprite index.
+	WORD dataFileSpriteCount = 0;
+	m_file->read((char*)&dataFileSpriteCount, 2);
 
 	if (!m_file->good())
 	{

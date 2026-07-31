@@ -55,9 +55,13 @@
 #define	__CINDEXSPRITE_H__
 
 #ifdef PLATFORM_WINDOWS
-	#include <Windows.h>
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-	#include "../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+	#include <Platform.h>
 #endif
 
 #ifdef SPRITELIB_BACKEND_SDL
@@ -65,6 +69,7 @@
 #endif
 
 #include <fstream>
+#include <vector>
 using namespace std;
 
 //-----------------------------------------------------------------------------
@@ -157,11 +162,60 @@ class CIndexSprite {
 		WORD*		GetPixelLine(WORD y)	const	{ return m_Pixels[y]; }
 
 #ifdef SPRITELIB_BACKEND_SDL
-		/* Backend sprite management */
-		spritectl_sprite_t GetBackendSprite() const	{ return m_backend_sprite; }
+		/* Backend sprite management
+		 *
+		 * This CIndexSprite (one animation frame) is shared and reused by
+		 * many different creatures/players, each with their own current
+		 * colorSet (gear tint etc). A single cached backend sprite keyed by
+		 * "whichever colorSet baked it last" meant every creature that
+		 * reused this frame with a different color destroyed and rebuilt
+		 * the other's cached sprite - constant malloc/free churn (and the
+		 * progressive FPS decay it caused) since this runs on every draw.
+		 * Cache one backend sprite PER distinct colorSet pair actually seen
+		 * instead, bounded so it can't grow unboundedly. */
+		spritectl_sprite_t FindBackendSprite(int colorSet0, int colorSet1) const
+		{
+			for (size_t i = 0; i < m_backend_cache.size(); i++)
+			{
+				if (m_backend_cache[i].colorSet0 == colorSet0 && m_backend_cache[i].colorSet1 == colorSet1)
+					return m_backend_cache[i].sprite;
+			}
+			return SPRITECTL_INVALID_SPRITE;
+		}
+		void AddBackendSprite(int colorSet0, int colorSet1, spritectl_sprite_t sprite)
+		{
+			// 8 was still too small for busy areas (many differently-colored
+			// characters sharing a popular frame) - confirmed via a heap
+			// snapshot diff that the eviction was still thrashing at 8, just
+			// less often than with the original single-slot cache. Raised to
+			// 32; still bounded (colorSet pairs realistically used by nearby
+			// characters at once is nowhere near this), just large enough
+			// that eviction should be rare in practice.
+			enum { MAX_BACKEND_CACHE_ENTRIES = 32 };
+			if (m_backend_cache.size() >= MAX_BACKEND_CACHE_ENTRIES)
+			{
+				spritectl_destroy_sprite(m_backend_cache.front().sprite);
+				m_backend_cache.erase(m_backend_cache.begin());
+			}
+			BackendCacheEntry entry;
+			entry.colorSet0 = colorSet0;
+			entry.colorSet1 = colorSet1;
+			entry.sprite = sprite;
+			m_backend_cache.push_back(entry);
+		}
 		bool IsBackendDirty() const			{ return m_backend_dirty; }
-		void SetBackendSprite(spritectl_sprite_t sprite)	{ m_backend_sprite = sprite; }
-		void SetBackendDirty(bool dirty)		{ m_backend_dirty = dirty; }
+		void SetBackendDirty(bool dirty)
+		{
+			m_backend_dirty = dirty;
+			if (dirty)
+				ClearBackendCache();
+		}
+		void ClearBackendCache()
+		{
+			for (size_t i = 0; i < m_backend_cache.size(); i++)
+				spritectl_destroy_sprite(m_backend_cache[i].sprite);
+			m_backend_cache.clear();
+		}
 #endif
 
 		//---------------------------------------------------------
@@ -257,7 +311,19 @@ class CIndexSprite {
 		bool			m_bInit;		// data�� �ִ°�?
 
 #ifdef SPRITELIB_BACKEND_SDL
-		spritectl_sprite_t	m_backend_sprite;	// Backend sprite handle
+		// fix: Blt() resolves per-pixel colors from the *current* static
+		// s_IndexValue[0]/[1] (set by SetUsingColorSet, e.g. per-creature
+		// helmet/gear recolor). This frame object is shared/reused across
+		// many creatures with different colors, so one backend sprite isn't
+		// enough - cache a small bounded set, one per distinct colorSet
+		// pair actually seen (see FindBackendSprite/AddBackendSprite above).
+		struct BackendCacheEntry
+		{
+			int colorSet0;
+			int colorSet1;
+			spritectl_sprite_t sprite;
+		};
+		std::vector<BackendCacheEntry>	m_backend_cache;
 		bool			m_backend_dirty;	// True if m_Pixels changed but not synced to backend
 #endif
 

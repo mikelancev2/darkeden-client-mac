@@ -52,6 +52,7 @@ endif()
 
 # SDL backend is now mandatory on all platforms (Windows native support removed)
 set(USE_SDL_BACKEND ON CACHE BOOL "Use SDL backend instead of native Windows APIs" FORCE)
+add_compile_definitions(PLATFORM_USE_SDL)
 
 option(BUILD_ENGINE "Build new SDL-based engine" ON)
 
@@ -144,7 +145,7 @@ if(USE_SDL_BACKEND OR NOT WIN32)
 	)
 
 	target_compile_definitions(TextSystem PRIVATE SPRITELIB_BACKEND_SDL USE_SDL_BACKEND)
-	if(NOT WIN32)
+	if(USE_SDL_BACKEND)
 		target_compile_definitions(TextSystem PRIVATE PLATFORM_MACOS)
 	endif()
 
@@ -166,7 +167,7 @@ if(USE_SDL_BACKEND OR NOT WIN32)
 	)
 
 	# Exclude Windows-specific files
-	if(NOT WIN32)
+	if(USE_SDL_BACKEND)
 		list(FILTER VS_UI_SRC_SOURCES EXCLUDE REGEX ".*Imm.*")
 		list(FILTER VS_UI_SRC_SOURCES EXCLUDE REGEX ".*WinMain.*")
 		list(FILTER VS_UI_SRC_SOURCES EXCLUDE REGEX ".*WebBrowser.*")
@@ -283,7 +284,6 @@ if(USE_SDL_BACKEND OR NOT WIN32)
 		framelib
 		TextSystem
 		SDL2::SDL2
-		SDL2::SDL2main
 		SDL2_image::SDL2_image
 		SDL2_ttf::SDL2_ttf
 	)
@@ -298,6 +298,10 @@ if(USE_SDL_BACKEND OR NOT WIN32)
 	# Define _LIB to match original VC6 build configuration
 	# This excludes test/debug code wrapped in #ifndef _LIB from library builds
 	target_compile_definitions(VS_UI PRIVATE _LIB)
+	if(MSVC)
+		target_compile_definitions(VS_UI PRIVATE __WINDOWS__=1 _WINDOWS_ _WINSOCKAPI_ NOMINMAX)
+		target_compile_options(VS_UI PRIVATE /FIPlatform.h)
+	endif()
 
 	message(STATUS "VS_UI library will be built from ${VS_UI_SRC_SOURCES} VS_UI files + ${VS_UI_CLIENT_SOURCES} Client files")
 endif()
@@ -525,6 +529,14 @@ if(USE_SDL_BACKEND OR NOT WIN32)
 	# The client-side packet handling is done through different mechanisms
 	list(FILTER CLIENT_MAIN_SOURCES EXCLUDE REGEX ".*Cpackets/.*Handler\\.cpp")
 
+	if(USE_SDL_BACKEND)
+		# Keep the SDL executable target from compiling stale or duplicated sources.
+		# These either live in static libraries already or are old backups.
+		list(FILTER CLIENT_MAIN_SOURCES EXCLUDE REGEX ".*/Client/Client\\.cpp$")
+		list(FILTER CLIENT_MAIN_SOURCES EXCLUDE REGEX ".*/Client/CSpritePal\\.cpp$")
+		list(FILTER CLIENT_MAIN_SOURCES EXCLUDE REGEX ".*MItemTable_bak-.*\\.cpp$")
+	endif()
+
 
 	# Exclude Windows-specific files
 	if(NOT WIN32)
@@ -566,6 +578,13 @@ if(USE_SDL_BACKEND OR NOT WIN32)
 		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 	)
 
+	if(WIN32)
+		# Build as a Windows GUI app so the SDL2 client does not open a
+		# separate debug console for players. The entry point is still main().
+		set_target_properties(DarkEden PROPERTIES WIN32_EXECUTABLE TRUE)
+		target_link_options(DarkEden PRIVATE "/ENTRY:mainCRTStartup")
+	endif()
+
 	# Link libraries (now includes VS_UI and TextSystem)
 	target_link_libraries(DarkEden PRIVATE
 		SpriteLib
@@ -575,11 +594,14 @@ if(USE_SDL_BACKEND OR NOT WIN32)
 		VS_UI
 		TextSystem
 		SDL2::SDL2
-		SDL2::SDL2main
 	)
+	if(WIN32)
+		target_link_libraries(DarkEden PRIVATE ws2_32)
+	endif()
 
-	# Link iconv library (not needed for Emscripten - has stub implementations)
-	if(NOT EMSCRIPTEN)
+	# Link iconv library only on platforms that need the external libiconv.
+	# Windows SDL builds use SDL_iconv or platform fallbacks instead.
+	if(NOT EMSCRIPTEN AND NOT WIN32)
 		target_link_libraries(DarkEden PRIVATE iconv)
 	endif()
 
@@ -621,6 +643,10 @@ if(USE_SDL_BACKEND OR NOT WIN32)
 		SPRITELIB_BACKEND_SDL
 		__GAME_CLIENT__=1
 	)
+	if(MSVC)
+		target_compile_definitions(DarkEden PRIVATE __WINDOWS__=1 _WINDOWS_ _WINSOCKAPI_ NOMINMAX)
+		target_compile_options(DarkEden PRIVATE /FIPlatform.h)
+	endif()
 
 	# Platform-specific definitions
 	if(NOT WIN32)

@@ -12,10 +12,14 @@
 // Include files
 //-----------------------------------------------------------------------------
 #ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <Windows.h>
+#endif
 #include <MMSystem.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #endif
 #include <string>
 #include "TextSystem/TextService.h"
@@ -28,6 +32,7 @@
 #include "VS_UI_Mouse_pointer.h"
 #include "UIDialog.h"
 #include "DebugInfo.h"
+#include "DebugLog.h"	// re-include after DebugInfo.h: DebugInfo.h's DEBUG_ADD_FORMAT is a no-op ((void)0), and whichever header's #define comes last wins for the rest of this file - this makes sure the real (file-logging) one from DebugLog.h is active here.
 #include "CGameUpdate.h"
 #include "DXLibBackend.h"  // For SDL text input functions
 #include "MMoneyManager.h"
@@ -6088,7 +6093,7 @@ CGameUpdate::Update(void)
 
 			// °ÔÀÓÀÇ frame¼ö Áõ°¡
 			g_CurrentFrame++;
-		
+
 			//if (--k==0) break;
 
 			//------------------------------------------
@@ -6127,7 +6132,7 @@ CGameUpdate::Update(void)
 			{
 				// Input°ªÀ» ÀÐ¾î¿Â´Ù.
 				UpdateInput();
-				
+
 				__BEGIN_PROFILE("ProcessInput")
 
 				#ifdef OUTPUT_DEBUG_UPDATE_LOOP
@@ -6182,11 +6187,11 @@ CGameUpdate::Update(void)
 			#endif
 
 			if (!UpdateSocketOutput() || g_Mode!=MODE_GAME)
-			{			
+			{
 				DEBUG_ADD("[CGameUpdate] UpdateSocketOutput Failed or Not MODE_GAME");
 
 				__END_PROFILE("GameSocketOutput")
-				
+
 				return;
 			}
 
@@ -6210,9 +6215,9 @@ CGameUpdate::Update(void)
 				#endif
 			}
 			///*
-			
+
 			//*/
-			
+
 
 			//------------------------------------------
 			//
@@ -6231,7 +6236,7 @@ CGameUpdate::Update(void)
 					//DEBUG_ADD( "IEM ok" );
 				#endif
 			}
-			
+
 			//------------------------------------------
 			//
 			//	Event Manager
@@ -6250,10 +6255,10 @@ CGameUpdate::Update(void)
 			#ifdef OUTPUT_DEBUG_UPDATE_LOOP
 				//DEBUG_ADD("z");//[Update] Before ZoneUpdate");
 			#endif
-				
+
 			__BEGIN_PROFILE("ZoneUpdate")
 
-			g_pZone->Update();			
+			g_pZone->Update();
 
 			__END_PROFILE("ZoneUpdate")
 

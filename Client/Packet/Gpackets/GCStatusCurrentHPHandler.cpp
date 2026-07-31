@@ -46,7 +46,7 @@ throw ( ProtocolException , Error )
 		}
 		else
 		{		
-			pCreature->SetStatus( MODIFY_CURRENT_HP, pPacket->getCurrentHP() );
+			pCreature->SetStatus( MODIFY_CURRENT_HP, pPacket->getCurrentHP(), pPacket->getCritical() );
 		}
 	}
 

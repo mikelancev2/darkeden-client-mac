@@ -13,6 +13,7 @@
 #include "ServerInfo.h"
 #include "DebugInfo.h"
 #include "UIFunction.h"
+#include "DebugLog.h"
 //#include <string>
 
 #include "Packet/CPackets/CGSelectQuest.h"
@@ -375,16 +376,16 @@ UIDialog::ProcessPCTalkDlg(C_VS_UI_DIALOG * pDlg, id_t id)
 					// 일반적인 대화
 					//--------------------------------------------------
 					case PCTalkBox::NORMAL :
-					{						
-						if( g_pPCTalkBox->m_AnswerIDMap.size() >= answerID )
+					{
+						if( answerID >= 1 && g_pPCTalkBox->m_AnswerIDMap.size() >= (size_t)answerID )
 							answerID = g_pPCTalkBox->m_AnswerIDMap[answerID-1] + 1;
-						
+
 						CGNPCAskAnswer _CGNPCAskAnswer;
 
 						_CGNPCAskAnswer.setObjectID( g_pPCTalkBox->GetNPCID() );
 						_CGNPCAskAnswer.setScriptID( g_pPCTalkBox->GetScriptID() );
 						_CGNPCAskAnswer.setAnswerID( answerID );
-						
+
 						g_pSocket->sendPacket( &_CGNPCAskAnswer );
 
 						//--------------------------------------------------
@@ -804,7 +805,7 @@ UIDialog::PopupPCTalkDlg(int x, int y)
 	//---------------------------------------------------------
 	DEBUG_ADD("setMENU");
 	m_pPCTalkDlg->SetMenu(pMenu, msgSize, false);// + 1, false);		// 끝내기 포함
-	
+
 	DEBUG_ADD("spMenu");
 	strcpy(m_ppDlgMessage[MESSAGE_PCTALK][0], g_pPCTalkBox->GetContent());
 

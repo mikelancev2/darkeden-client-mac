@@ -11,6 +11,10 @@
 #ifndef __VS_UI_WIDGET_H__
 #define __VS_UI_WIDGET_H__
 
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#endif
+
 #include "VS_UI_Base.h"
 #include "VS_UI_GlobalResource.h"
 #ifdef PLATFORM_WINDOWS
@@ -20,8 +24,10 @@
 #include "../widget/u_button.h"  // For EventButton, Exec, Button classes
 
 // Stub definitions for non-Windows platforms (without Immersion library)
-#ifndef PLATFORM_WINDOWS
+#if !defined(PLATFORM_WINDOWS) || defined(PLATFORM_USE_SDL)
+#ifndef PLATFORM_USE_SDL
 #include <sys/time.h>
+#endif
 
 // Stub for CImm class (from Immersion library)
 class CImm {
@@ -44,13 +50,15 @@ static CImm gpC_Imm_instance;
 #define gpC_Imm (&gpC_Imm_instance)
 
 // GetTickCount stub
+#ifndef PLATFORM_USE_SDL
 inline DWORD GetTickCount() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (DWORD)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
+#endif
 
-#endif // !PLATFORM_WINDOWS
+#endif // !PLATFORM_WINDOWS || PLATFORM_USE_SDL
 /*
 //----------------------------------------------------------------------------
 // Button Class

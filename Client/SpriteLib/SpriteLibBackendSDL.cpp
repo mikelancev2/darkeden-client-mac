@@ -10,9 +10,20 @@
 -----------------------------------------------------------------------------*/
 
 #include "SpriteLibBackendSDL.h"
+#include "../DXLib/CDirectDraw.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+#ifndef SPRITELIB_SDL_VERBOSE_LOG
+#define SPRITELIB_SDL_VERBOSE_LOG 0
+#endif
+
+#if SPRITELIB_SDL_VERBOSE_LOG
+#define SPRITELIB_SDL_LOG(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
+#else
+#define SPRITELIB_SDL_LOG(...) do {} while (0)
+#endif
 
 /* ============================================================================
  * Global State
@@ -74,7 +85,7 @@ SDL_Surface* spritectl_sdl_create_surface(int width, int height, int format) {
 			if (surf) {
 				static int debug_565_count = 0;
 				if (debug_565_count < 3) {
-					fprintf(stderr, "Created RGB565 surface: requested format=RGB565, actual format=%s\n",
+					SPRITELIB_SDL_LOG("Created RGB565 surface: requested format=RGB565, actual format=%s\n",
 						SDL_GetPixelFormatName(surf->format->format));
 					debug_565_count++;
 				}
@@ -90,7 +101,7 @@ SDL_Surface* spritectl_sdl_create_surface(int width, int height, int format) {
 			if (surf) {
 				static int debug_555_count = 0;
 				if (debug_555_count < 3) {
-					fprintf(stderr, "Created RGB555 surface: requested format=RGB555, actual format=%s\n",
+					SPRITELIB_SDL_LOG("Created RGB555 surface: requested format=RGB555, actual format=%s\n",
 						SDL_GetPixelFormatName(surf->format->format));
 					debug_555_count++;
 				}
@@ -111,7 +122,7 @@ SDL_Surface* spritectl_sdl_create_surface(int width, int height, int format) {
 			                            0x001F,  /* B mask */
 			                            0x0000); /* A mask */
 			if (surf) {
-				fprintf(stderr, "Created DEFAULT surface: actual format=%s\n",
+				SPRITELIB_SDL_LOG("Created DEFAULT surface: actual format=%s\n",
 					SDL_GetPixelFormatName(surf->format->format));
 			}
 			return surf;
@@ -407,7 +418,7 @@ int spritectl_blt_sprite_rle(spritectl_surface_t dest, int x, int y,
 	/* Debug: print surface info on first call */
 	static int debug_printed = 0;
 	if (debug_printed < 3) {
-		fprintf(stderr, "[RLE BLT] sprite=%dx%d, pos=(%d,%d), surface=%dx%d, bpp=%d, pitch=%d, stride=%d\n",
+		SPRITELIB_SDL_LOG("[RLE BLT] sprite=%dx%d, pos=(%d,%d), surface=%dx%d, bpp=%d, pitch=%d, stride=%d\n",
 		        sprite->width, sprite->height, x, y, dest_width, dest_height, dest_bytes_per_pixel, dest_pitch, dest_stride);
 		debug_printed++;
 	}
@@ -429,7 +440,7 @@ int spritectl_blt_sprite_rle(spritectl_surface_t dest, int x, int y,
 		/* Validate RLE data */
 		if (rle_data_size < 1) {
 			if (debug_printed < 3) {
-				fprintf(stderr, "[RLE BLT] Invalid RLE data size: %d at scanline %d\n", rle_data_size, sy);
+				SPRITELIB_SDL_LOG("[RLE BLT] Invalid RLE data size: %d at scanline %d\n", rle_data_size, sy);
 			}
 			continue;
 		}
@@ -437,7 +448,7 @@ int spritectl_blt_sprite_rle(spritectl_surface_t dest, int x, int y,
 		int seg_count = rle_data[rle_index++];
 		if (rle_index + seg_count * 2 > rle_data_size) {
 			if (debug_printed < 3) {
-				fprintf(stderr, "[RLE BLT] RLE data corruption: seg_count=%d, size=%d at scanline %d\n",
+				SPRITELIB_SDL_LOG("[RLE BLT] RLE data corruption: seg_count=%d, size=%d at scanline %d\n",
 				        seg_count, rle_data_size, sy);
 			}
 			continue;
@@ -463,7 +474,7 @@ int spritectl_blt_sprite_rle(spritectl_surface_t dest, int x, int y,
 				/* Check if we're about to read past RLE data */
 				if (rle_index >= rle_data_size) {
 					if (debug_printed < 3) {
-						fprintf(stderr, "[RLE BLT] RLE data overrun: rle_index=%d, size=%d, sx=%d\n",
+						SPRITELIB_SDL_LOG("[RLE BLT] RLE data overrun: rle_index=%d, size=%d, sx=%d\n",
 						        rle_index, rle_data_size, sx);
 					}
 					break;
@@ -506,10 +517,10 @@ int spritectl_blt_sprite_rle(spritectl_surface_t dest, int x, int y,
 								dest_row_32[dest_x] = (255 << 24) | (b << 16) | (g << 8) | r;
 							}
 						} else if (debug_printed < 3) {
-							fprintf(stderr, "[RLE BLT] Unsupported dest BPP: %d\n", dest_bytes_per_pixel);
+							SPRITELIB_SDL_LOG("[RLE BLT] Unsupported dest BPP: %d\n", dest_bytes_per_pixel);
 						}
 					} else if (debug_printed < 3) {
-						fprintf(stderr, "[RLE BLT] OUT OF BOUNDS: dest_x=%d, stride=%d, sx=%d, x=%d\n",
+						SPRITELIB_SDL_LOG("[RLE BLT] OUT OF BOUNDS: dest_x=%d, stride=%d, sx=%d, x=%d\n",
 						        dest_x, dest_stride, sx, x);
 					}
 				}
@@ -611,6 +622,222 @@ int spritectl_blt_sprite(spritectl_surface_t dest, int x, int y,
 		return spritectl_blt_sprite_rle(dest, x, y, sprite, flags, alpha);
 	}
 
+	/* fix: font glyphs are created as plain RGBA32 sprites (no RLE - see
+	 * spritectl_create_sprite in TextBackendSDL.cpp), so every single
+	 * character drawn fell through to the generic SDL_Surface path below:
+	 * SDL_CreateRGBSurface/Lock/SetBlendMode/SetAlphaMod/BlitSurface every
+	 * call. A CPU profile (Visual Studio, ~2min idle session) showed this
+	 * one function at 57% of *total* process CPU time - because the 32bpp
+	 * RGBA scratch surface never matches the game's 16bpp (555/565)
+	 * backbuffer format, SDL_BlitSurface can't use its fast matching-format
+	 * path and instead does a full per-pixel converting+blending blit
+	 * through its generic blitter every call. Handle the common RGBA32
+	 * case with a direct manual alpha blend straight into the destination
+	 * pixels instead, skipping SDL's surface machinery entirely. */
+	if (sprite->format == SPRITECTL_FORMAT_RGBA32 && sprite->pixels) {
+		SDL_Surface* sdl_surface = dest->surface;
+		if (!sdl_surface) {
+			return -1;
+		}
+
+		bool was_locked_fast = (dest->locked > 0);
+		if (!was_locked_fast) {
+			if (SDL_MUSTLOCK(sdl_surface)) {
+				SDL_LockSurface(sdl_surface);
+			}
+		}
+
+		int dest_width = sdl_surface->w;
+		int dest_height = sdl_surface->h;
+		int dest_pitch = sdl_surface->pitch;
+		int dest_bpp = sdl_surface->format->BytesPerPixel;
+
+		int clip_left = (x < 0) ? -x : 0;
+		int clip_top = (y < 0) ? -y : 0;
+		int clip_right = (x + sprite->width > dest_width) ? dest_width - x : sprite->width;
+		int clip_bottom = (y + sprite->height > dest_height) ? dest_height - y : sprite->height;
+
+		if (clip_left < clip_right && clip_top < clip_bottom) {
+			const uint32_t* src_pixels = (const uint32_t*)sprite->pixels;
+			uint8_t* dest_bytes = (uint8_t*)sdl_surface->pixels;
+			bool applyAlphaMod = (flags & SPRITECTL_BLT_ALPHA) != 0;
+
+			for (int sy = clip_top; sy < clip_bottom; sy++) {
+				const uint32_t* src_row = src_pixels + sy * sprite->width;
+				uint8_t* dest_row_bytes = dest_bytes + (y + sy) * dest_pitch;
+
+				for (int sx = clip_left; sx < clip_right; sx++) {
+					uint32_t srcPixel = src_row[sx];
+					uint8_t srcAlpha = (uint8_t)((srcPixel >> 24) & 0xFF);
+					if (srcAlpha == 0) {
+						continue;
+					}
+					uint8_t srcR = (uint8_t)(srcPixel & 0xFF);
+					uint8_t srcG = (uint8_t)((srcPixel >> 8) & 0xFF);
+					uint8_t srcB = (uint8_t)((srcPixel >> 16) & 0xFF);
+					if (applyAlphaMod) {
+						srcAlpha = (uint8_t)((srcAlpha * alpha) / 255);
+						if (srcAlpha == 0) {
+							continue;
+						}
+					}
+
+					int dest_x = x + sx;
+
+					if (dest_bpp == 2) {
+						uint16_t* dest_pixel_ptr = (uint16_t*)(dest_row_bytes) + dest_x;
+						if (srcAlpha == 255) {
+							*dest_pixel_ptr = spritectl_rgb_to_565(srcR, srcG, srcB);
+						} else {
+							uint8_t dr, dg, db;
+							spritectl_565_to_rgb(*dest_pixel_ptr, &dr, &dg, &db);
+							uint8_t blendR = (uint8_t)((srcR * srcAlpha + dr * (255 - srcAlpha)) / 255);
+							uint8_t blendG = (uint8_t)((srcG * srcAlpha + dg * (255 - srcAlpha)) / 255);
+							uint8_t blendB = (uint8_t)((srcB * srcAlpha + db * (255 - srcAlpha)) / 255);
+							*dest_pixel_ptr = spritectl_rgb_to_565(blendR, blendG, blendB);
+						}
+					} else if (dest_bpp == 4) {
+						uint32_t* dest_pixel_ptr = (uint32_t*)(dest_row_bytes) + dest_x;
+						if (srcAlpha == 255) {
+							*dest_pixel_ptr = (255u << 24) | (srcB << 16) | (srcG << 8) | srcR;
+						} else {
+							uint32_t destPixel = *dest_pixel_ptr;
+							uint8_t dr = (uint8_t)(destPixel & 0xFF);
+							uint8_t dg = (uint8_t)((destPixel >> 8) & 0xFF);
+							uint8_t db = (uint8_t)((destPixel >> 16) & 0xFF);
+							uint8_t blendR = (uint8_t)((srcR * srcAlpha + dr * (255 - srcAlpha)) / 255);
+							uint8_t blendG = (uint8_t)((srcG * srcAlpha + dg * (255 - srcAlpha)) / 255);
+							uint8_t blendB = (uint8_t)((srcB * srcAlpha + db * (255 - srcAlpha)) / 255);
+							*dest_pixel_ptr = (255u << 24) | (blendB << 16) | (blendG << 8) | blendR;
+						}
+					}
+				}
+			}
+		}
+
+		if (!was_locked_fast) {
+			if (SDL_MUSTLOCK(sdl_surface)) {
+				SDL_UnlockSurface(sdl_surface);
+			}
+		}
+
+		return 0;
+	}
+
+	/* fix: shadow sprites (CShadowSprite, see get_backend_shadow_sprite in
+	 * CSpriteSurface_Adapter.cpp) are created as plain RGB565 sprites with
+	 * no RLE data - same anti-pattern as the RGBA32 glyph case above, just
+	 * a different format. A CPU profile showed CSpriteSurface::BltShadowSprite
+	 * / BltShadowSpriteDarkness alone accounting for roughly half of total
+	 * game CPU (drawn for every visible creature/player every frame), almost
+	 * entirely inside the SDL_BlitSurface fallback below. Colorkey
+	 * transparency for these sprites is a simple binary check (pixel==0x0000
+	 * is transparent, see spritectl_convert_565_to_rgba above), so this can
+	 * skip SDL's surface machinery entirely too, same as the RGBA32 path. */
+	if ((sprite->format == SPRITECTL_FORMAT_RGB565 || sprite->format == SPRITECTL_FORMAT_RGB555) && sprite->pixels) {
+		SDL_Surface* sdl_surface = dest->surface;
+		if (!sdl_surface) {
+			return -1;
+		}
+
+		bool was_locked_fast = (dest->locked > 0);
+		if (!was_locked_fast) {
+			if (SDL_MUSTLOCK(sdl_surface)) {
+				SDL_LockSurface(sdl_surface);
+			}
+		}
+
+		int dest_width = sdl_surface->w;
+		int dest_height = sdl_surface->h;
+		int dest_pitch = sdl_surface->pitch;
+		int dest_bpp = sdl_surface->format->BytesPerPixel;
+
+		int clip_left = (x < 0) ? -x : 0;
+		int clip_top = (y < 0) ? -y : 0;
+		int clip_right = (x + sprite->width > dest_width) ? dest_width - x : sprite->width;
+		int clip_bottom = (y + sprite->height > dest_height) ? dest_height - y : sprite->height;
+
+		if (clip_left < clip_right && clip_top < clip_bottom) {
+			const uint16_t COLORKEY = 0x0000;
+			bool is555 = (sprite->format == SPRITECTL_FORMAT_RGB555);
+			bool applyAlphaMod = (flags & SPRITECTL_BLT_ALPHA) != 0;
+			const uint16_t* src_pixels = (const uint16_t*)sprite->pixels;
+			uint8_t* dest_bytes = (uint8_t*)sdl_surface->pixels;
+
+			for (int sy = clip_top; sy < clip_bottom; sy++) {
+				const uint16_t* src_row = src_pixels + sy * sprite->width;
+				uint8_t* dest_row_bytes = dest_bytes + (y + sy) * dest_pitch;
+
+				for (int sx = clip_left; sx < clip_right; sx++) {
+					uint16_t srcPixel = src_row[sx];
+					if (srcPixel == COLORKEY) {
+						continue;
+					}
+
+					int dest_x = x + sx;
+
+					/* Fast path: opaque pixel, 565 source into 565 dest -
+					 * copy the packed pixel directly, no 8-bit round-trip. */
+					if (!applyAlphaMod && !is555 && dest_bpp == 2) {
+						*((uint16_t*)(dest_row_bytes) + dest_x) = srcPixel;
+						continue;
+					}
+
+					uint8_t srcR, srcG, srcB;
+					if (is555) {
+						spritectl_555_to_rgb(srcPixel, &srcR, &srcG, &srcB);
+					} else {
+						spritectl_565_to_rgb(srcPixel, &srcR, &srcG, &srcB);
+					}
+
+					uint8_t srcAlpha = 255;
+					if (applyAlphaMod) {
+						srcAlpha = (uint8_t)((255 * alpha) / 255);
+						if (srcAlpha == 0) {
+							continue;
+						}
+					}
+
+					if (dest_bpp == 2) {
+						uint16_t* dest_pixel_ptr = (uint16_t*)(dest_row_bytes) + dest_x;
+						if (srcAlpha == 255) {
+							*dest_pixel_ptr = spritectl_rgb_to_565(srcR, srcG, srcB);
+						} else {
+							uint8_t dr, dg, db;
+							spritectl_565_to_rgb(*dest_pixel_ptr, &dr, &dg, &db);
+							uint8_t blendR = (uint8_t)((srcR * srcAlpha + dr * (255 - srcAlpha)) / 255);
+							uint8_t blendG = (uint8_t)((srcG * srcAlpha + dg * (255 - srcAlpha)) / 255);
+							uint8_t blendB = (uint8_t)((srcB * srcAlpha + db * (255 - srcAlpha)) / 255);
+							*dest_pixel_ptr = spritectl_rgb_to_565(blendR, blendG, blendB);
+						}
+					} else if (dest_bpp == 4) {
+						uint32_t* dest_pixel_ptr = (uint32_t*)(dest_row_bytes) + dest_x;
+						if (srcAlpha == 255) {
+							*dest_pixel_ptr = (255u << 24) | (srcB << 16) | (srcG << 8) | srcR;
+						} else {
+							uint32_t destPixel = *dest_pixel_ptr;
+							uint8_t dr = (uint8_t)(destPixel & 0xFF);
+							uint8_t dg = (uint8_t)((destPixel >> 8) & 0xFF);
+							uint8_t db = (uint8_t)((destPixel >> 16) & 0xFF);
+							uint8_t blendR = (uint8_t)((srcR * srcAlpha + dr * (255 - srcAlpha)) / 255);
+							uint8_t blendG = (uint8_t)((srcG * srcAlpha + dg * (255 - srcAlpha)) / 255);
+							uint8_t blendB = (uint8_t)((srcB * srcAlpha + db * (255 - srcAlpha)) / 255);
+							*dest_pixel_ptr = (255u << 24) | (blendB << 16) | (blendG << 8) | blendR;
+						}
+					}
+				}
+			}
+		}
+
+		if (!was_locked_fast) {
+			if (SDL_MUSTLOCK(sdl_surface)) {
+				SDL_UnlockSurface(sdl_surface);
+			}
+		}
+
+		return 0;
+	}
+
 	/* Fallback to old method for sprites without RLE data */
 	static int fallback_count = 0;
 	if (fallback_count < 3) {
@@ -642,12 +869,35 @@ int spritectl_blt_sprite(spritectl_surface_t dest, int x, int y,
 	 * Locking the destination surface before blitting is incorrect and will cause errors.
 	 */
 
-	/* Create temporary surface from sprite pixels */
-	src_surface = SDL_CreateRGBSurface(0, sprite->width, sprite->height, 32,
-	                                  0xFF, 0xFF00, 0xFF0000, 0xFF000000);
-	if (!src_surface) {
-		return -1;
+	/* Reuse a grow-only scratch surface instead of creating/destroying a new
+	 * SDL surface on every call. This path runs on every glyph draw (font
+	 * glyphs are created without RLE data - see spritectl_create_sprite in
+	 * TextBackendSDL.cpp), so at UI-heavy-text framerates this was doing
+	 * thousands of SDL_CreateRGBSurface/SDL_FreeSurface cycles per second,
+	 * which is both slow on its own and fragments the heap - causing a
+	 * progressive FPS decay the longer the process ran (steadily slower
+	 * mallocs/frees), not just a flat constant overhead. */
+	static SDL_Surface* s_scratch_surface = NULL;
+	static int s_scratch_w = 0;
+	static int s_scratch_h = 0;
+
+	if (!s_scratch_surface || s_scratch_w < sprite->width || s_scratch_h < sprite->height) {
+		if (s_scratch_surface) {
+			SDL_FreeSurface(s_scratch_surface);
+		}
+		int new_w = (s_scratch_w > sprite->width) ? s_scratch_w : sprite->width;
+		int new_h = (s_scratch_h > sprite->height) ? s_scratch_h : sprite->height;
+		s_scratch_surface = SDL_CreateRGBSurface(0, new_w, new_h, 32,
+		                                        0xFF, 0xFF00, 0xFF0000, 0xFF000000);
+		if (!s_scratch_surface) {
+			s_scratch_w = 0;
+			s_scratch_h = 0;
+			return -1;
+		}
+		s_scratch_w = new_w;
+		s_scratch_h = new_h;
 	}
+	src_surface = s_scratch_surface;
 
 	/* Use cached RGBA pixels if available, otherwise convert and cache */
 	if (sprite->rgba_pixels == NULL && sprite->format != SPRITECTL_FORMAT_RGBA32) {
@@ -692,10 +942,17 @@ int spritectl_blt_sprite(spritectl_surface_t dest, int x, int y,
 		pixel_src = fallback_pixels;
 	}
 
-	/* Copy to temporary surface */
+	/* Copy to scratch surface, row by row since it may be wider than the
+	 * sprite (grow-only reuse means src_surface->w/h can exceed sprite size) */
 	SDL_LockSurface(src_surface);
-	uint32_t* src_pixels = (uint32_t*)src_surface->pixels;
-	memcpy(src_pixels, pixel_src, sprite->width * sprite->height * sizeof(uint32_t));
+	{
+		uint8_t* dst_bytes = (uint8_t*)src_surface->pixels;
+		for (int row = 0; row < sprite->height; row++) {
+			memcpy(dst_bytes + row * src_surface->pitch,
+			       pixel_src + row * sprite->width,
+			       sprite->width * sizeof(uint32_t));
+		}
+	}
 	SDL_UnlockSurface(src_surface);
 
 	/* Handle alpha blending */
@@ -716,16 +973,23 @@ int spritectl_blt_sprite(spritectl_surface_t dest, int x, int y,
 	dest_rect.w = sprite->width;
 	dest_rect.h = sprite->height;
 
+	/* Source rect must be limited to the sprite's actual size - the scratch
+	 * surface can be larger than the sprite since it's reused/grow-only. */
+	SDL_Rect src_rect;
+	src_rect.x = 0;
+	src_rect.y = 0;
+	src_rect.w = sprite->width;
+	src_rect.h = sprite->height;
+
 	/* Blit sprite to destination */
-	if (SDL_BlitSurface(src_surface, NULL, dest->surface, &dest_rect) != 0) {
+	if (SDL_BlitSurface(src_surface, &src_rect, dest->surface, &dest_rect) != 0) {
 		fprintf(stderr, "SpriteLib Backend: SDL_BlitSurface failed: %s\n", SDL_GetError());
 		result = -1;
 	} else {
 		result = 0;
 	}
 
-	/* Cleanup */
-	SDL_FreeSurface(src_surface);
+	/* NOTE: src_surface is the reused scratch surface - do not free it here. */
 
 	// Re-lock the surface if it was locked before (to maintain expected state)
 	if (was_locked) {
@@ -738,11 +1002,78 @@ int spritectl_blt_sprite(spritectl_surface_t dest, int x, int y,
 	return result;
 }
 
+/* fix: matches the original DirectDraw client's CShadowSprite::BltDarkness /
+ * memcpyShadowDarkness (see CShadowSprite.cpp in the old client) - a real
+ * "darken what's already there" shadow, not a flat color paint. The old
+ * client did this with a precomputed per-channel bitmask + a single shift
+ * on the packed 16-bit word (a period-appropriate SIMD-ish trick to avoid
+ * bit bleed between channels); doing the shift on each channel separately
+ * here is simpler and exactly equivalent. */
+static inline uint16_t spritectl_darken_565(uint16_t pixel, int darkBits) {
+	uint16_t r = (pixel >> 11) & 0x1F;
+	uint16_t g = (pixel >> 5) & 0x3F;
+	uint16_t b = pixel & 0x1F;
+	r >>= darkBits;
+	g >>= darkBits;
+	b >>= darkBits;
+	return (uint16_t)((r << 11) | (g << 5) | b);
+}
+
+int spritectl_blt_shadow_darken(spritectl_surface_t dest, int x, int y,
+                                spritectl_sprite_t sprite, int darkBits) {
+	if (!dest || !sprite || !sprite->pixels) {
+		return -1;
+	}
+	if (sprite->format != SPRITECTL_FORMAT_RGB565) {
+		return -1;
+	}
+
+	SDL_Surface* sdl_surface = dest->surface;
+	if (!sdl_surface || sdl_surface->format->BytesPerPixel != 2) {
+		return -1;
+	}
+
+	bool was_locked_fast = (dest->locked > 0);
+	if (!was_locked_fast && SDL_MUSTLOCK(sdl_surface)) {
+		SDL_LockSurface(sdl_surface);
+	}
+
+	int dest_width = sdl_surface->w;
+	int dest_height = sdl_surface->h;
+	int dest_pitch = sdl_surface->pitch;
+
+	int clip_left = (x < 0) ? -x : 0;
+	int clip_top = (y < 0) ? -y : 0;
+	int clip_right = (x + sprite->width > dest_width) ? dest_width - x : sprite->width;
+	int clip_bottom = (y + sprite->height > dest_height) ? dest_height - y : sprite->height;
+
+	if (clip_left < clip_right && clip_top < clip_bottom) {
+		const uint16_t* src_pixels = (const uint16_t*)sprite->pixels;
+		uint8_t* dest_bytes = (uint8_t*)sdl_surface->pixels;
+
+		for (int sy = clip_top; sy < clip_bottom; sy++) {
+			const uint16_t* src_row = src_pixels + sy * sprite->width;
+			uint16_t* dest_row = (uint16_t*)(dest_bytes + (y + sy) * dest_pitch);
+
+			for (int sx = clip_left; sx < clip_right; sx++) {
+				if (src_row[sx] == 0x0000) {
+					continue; /* transparent - leave ground pixel alone */
+				}
+				int dest_x = x + sx;
+				dest_row[dest_x] = spritectl_darken_565(dest_row[dest_x], darkBits);
+			}
+		}
+	}
+
+	if (!was_locked_fast && SDL_MUSTLOCK(sdl_surface)) {
+		SDL_UnlockSurface(sdl_surface);
+	}
+
+	return 0;
+}
+
 int spritectl_blt_sprite_scaled(spritectl_surface_t dest, int x, int y,
                                 spritectl_sprite_t sprite, int scale, int flags) {
-	SDL_Surface* src_surface = NULL;
-	SDL_Surface* scaled_surface = NULL;
-	int result = -1;
 	int scaled_width, scaled_height;
 
 	if (!dest || !sprite) {
@@ -757,12 +1088,34 @@ int spritectl_blt_sprite_scaled(spritectl_surface_t dest, int x, int y,
 		return 0;  /* Too small to see */
 	}
 
-	/* Create temporary surface from sprite pixels */
-	src_surface = SDL_CreateRGBSurface(0, sprite->width, sprite->height, 32,
-	                                  0xFF, 0xFF00, 0xFF0000, 0xFF000000);
-	if (!src_surface) {
-		return -1;
+	/* Same anti-pattern as the old glyph blit: this used to create+destroy
+	 * two fresh 32-bit SDL_CreateRGBSurface surfaces on every single call
+	 * (half-size world image objects go through here every frame), which
+	 * is heap-churn on top of a slow converting SDL_BlitSurface into the
+	 * 16-bit backbuffer. Reuse grow-only scratch surfaces instead, and
+	 * blit the final (always-32-bit) scaled surface into dest with a
+	 * direct pixel copy instead of SDL_BlitSurface. */
+	static SDL_Surface* s_src_scratch = NULL;
+	static int s_src_scratch_w = 0;
+	static int s_src_scratch_h = 0;
+
+	if (!s_src_scratch || s_src_scratch_w < sprite->width || s_src_scratch_h < sprite->height) {
+		if (s_src_scratch) {
+			SDL_FreeSurface(s_src_scratch);
+		}
+		int new_w = (s_src_scratch_w > sprite->width) ? s_src_scratch_w : sprite->width;
+		int new_h = (s_src_scratch_h > sprite->height) ? s_src_scratch_h : sprite->height;
+		s_src_scratch = SDL_CreateRGBSurface(0, new_w, new_h, 32,
+		                                    0xFF, 0xFF00, 0xFF0000, 0xFF000000);
+		if (!s_src_scratch) {
+			s_src_scratch_w = 0;
+			s_src_scratch_h = 0;
+			return -1;
+		}
+		s_src_scratch_w = new_w;
+		s_src_scratch_h = new_h;
 	}
+	SDL_Surface* src_surface = s_src_scratch;
 
 	/* Use cached RGBA pixels if available, otherwise convert and cache */
 	if (sprite->rgba_pixels == NULL && sprite->format != SPRITECTL_FORMAT_RGBA32) {
@@ -807,42 +1160,134 @@ int spritectl_blt_sprite_scaled(spritectl_surface_t dest, int x, int y,
 		pixel_src = fallback_pixels;
 	}
 
-	/* Copy to temporary surface */
+	/* Copy to scratch surface, row by row since it may be wider/taller than
+	 * the sprite (grow-only reuse means src_surface->w/h can exceed sprite
+	 * size, so pitch may not equal sprite->width * 4). */
 	SDL_LockSurface(src_surface);
-	uint32_t* src_pixels = (uint32_t*)src_surface->pixels;
-	memcpy(src_pixels, pixel_src, sprite->width * sprite->height * sizeof(uint32_t));
+	{
+		uint8_t* dst_bytes = (uint8_t*)src_surface->pixels;
+		for (int row = 0; row < sprite->height; row++) {
+			memcpy(dst_bytes + row * src_surface->pitch,
+			       pixel_src + row * sprite->width,
+			       sprite->width * sizeof(uint32_t));
+		}
+	}
 	SDL_UnlockSurface(src_surface);
 
-	/* Create scaled surface */
-	scaled_surface = SDL_CreateRGBSurface(0, scaled_width, scaled_height, 32,
-	                                    0xFF, 0xFF00, 0xFF0000, 0xFF000000);
-	if (!scaled_surface) {
-		SDL_FreeSurface(src_surface);
+	/* Reuse a grow-only scratch surface for the scaled output too. */
+	static SDL_Surface* s_scaled_scratch = NULL;
+	static int s_scaled_scratch_w = 0;
+	static int s_scaled_scratch_h = 0;
+
+	if (!s_scaled_scratch || s_scaled_scratch_w < scaled_width || s_scaled_scratch_h < scaled_height) {
+		if (s_scaled_scratch) {
+			SDL_FreeSurface(s_scaled_scratch);
+		}
+		int new_w = (s_scaled_scratch_w > scaled_width) ? s_scaled_scratch_w : scaled_width;
+		int new_h = (s_scaled_scratch_h > scaled_height) ? s_scaled_scratch_h : scaled_height;
+		s_scaled_scratch = SDL_CreateRGBSurface(0, new_w, new_h, 32,
+		                                       0xFF, 0xFF00, 0xFF0000, 0xFF000000);
+		if (!s_scaled_scratch) {
+			s_scaled_scratch_w = 0;
+			s_scaled_scratch_h = 0;
+			return -1;
+		}
+		s_scaled_scratch_w = new_w;
+		s_scaled_scratch_h = new_h;
+	}
+	SDL_Surface* scaled_surface = s_scaled_scratch;
+
+	/* Scale the surface. Explicit src/dest rects since both scratch
+	 * surfaces may be larger than sprite/scaled_width,height (grow-only). */
+	SDL_Rect stretch_src_rect = { 0, 0, sprite->width, sprite->height };
+	SDL_Rect stretch_dest_rect = { 0, 0, scaled_width, scaled_height };
+	SDL_SoftStretch(src_surface, &stretch_src_rect, scaled_surface, &stretch_dest_rect);
+
+	/* Blit scaled sprite directly into dest's pixels instead of going
+	 * through SDL_BlitSurface - same fix as the RGBA32 glyph fast path
+	 * above: scaled_surface is always 32-bit RGBA, but dest is typically
+	 * the 16-bit RGB565 backbuffer, so SDL_BlitSurface would have to take
+	 * its slow generic converting path on every world image object. */
+	SDL_Surface* sdl_dest = dest->surface;
+	if (!sdl_dest) {
 		return -1;
 	}
 
-	/* Scale the surface */
-	SDL_SoftStretch(src_surface, NULL, scaled_surface, NULL);
-
-	/* Blit scaled sprite to destination */
-	SDL_Rect dest_rect;
-	dest_rect.x = x;
-	dest_rect.y = y;
-	dest_rect.w = scaled_width;
-	dest_rect.h = scaled_height;
-
-	if (SDL_BlitSurface(scaled_surface, NULL, dest->surface, &dest_rect) != 0) {
-		fprintf(stderr, "SpriteLib Backend: SDL_BlitSurface failed: %s\n", SDL_GetError());
-		result = -1;
-	} else {
-		result = 0;
+	bool was_locked_fast = (dest->locked > 0);
+	if (!was_locked_fast && SDL_MUSTLOCK(sdl_dest)) {
+		SDL_LockSurface(sdl_dest);
 	}
 
-	/* Cleanup */
-	SDL_FreeSurface(scaled_surface);
-	SDL_FreeSurface(src_surface);
+	int dest_width = sdl_dest->w;
+	int dest_height = sdl_dest->h;
+	int dest_pitch = sdl_dest->pitch;
+	int dest_bpp = sdl_dest->format->BytesPerPixel;
 
-	return result;
+	int clip_left = (x < 0) ? -x : 0;
+	int clip_top = (y < 0) ? -y : 0;
+	int clip_right = (x + scaled_width > dest_width) ? dest_width - x : scaled_width;
+	int clip_bottom = (y + scaled_height > dest_height) ? dest_height - y : scaled_height;
+
+	if (clip_left < clip_right && clip_top < clip_bottom) {
+		SDL_LockSurface(scaled_surface);
+		const uint8_t* scaled_bytes = (const uint8_t*)scaled_surface->pixels;
+		int scaled_pitch = scaled_surface->pitch;
+		uint8_t* dest_bytes = (uint8_t*)sdl_dest->pixels;
+
+		for (int sy = clip_top; sy < clip_bottom; sy++) {
+			const uint32_t* src_row = (const uint32_t*)(scaled_bytes + sy * scaled_pitch);
+			uint8_t* dest_row_bytes = dest_bytes + (y + sy) * dest_pitch;
+
+			for (int sx = clip_left; sx < clip_right; sx++) {
+				uint32_t srcPixel = src_row[sx];
+				uint8_t srcAlpha = (uint8_t)((srcPixel >> 24) & 0xFF);
+				if (srcAlpha == 0) {
+					continue;
+				}
+				uint8_t srcR = (uint8_t)(srcPixel & 0xFF);
+				uint8_t srcG = (uint8_t)((srcPixel >> 8) & 0xFF);
+				uint8_t srcB = (uint8_t)((srcPixel >> 16) & 0xFF);
+
+				int dest_x = x + sx;
+
+				if (dest_bpp == 2) {
+					uint16_t* dest_pixel_ptr = (uint16_t*)(dest_row_bytes) + dest_x;
+					if (srcAlpha == 255) {
+						*dest_pixel_ptr = spritectl_rgb_to_565(srcR, srcG, srcB);
+					} else {
+						uint8_t dr, dg, db;
+						spritectl_565_to_rgb(*dest_pixel_ptr, &dr, &dg, &db);
+						uint8_t blendR = (uint8_t)((srcR * srcAlpha + dr * (255 - srcAlpha)) / 255);
+						uint8_t blendG = (uint8_t)((srcG * srcAlpha + dg * (255 - srcAlpha)) / 255);
+						uint8_t blendB = (uint8_t)((srcB * srcAlpha + db * (255 - srcAlpha)) / 255);
+						*dest_pixel_ptr = spritectl_rgb_to_565(blendR, blendG, blendB);
+					}
+				} else if (dest_bpp == 4) {
+					uint32_t* dest_pixel_ptr = (uint32_t*)(dest_row_bytes) + dest_x;
+					if (srcAlpha == 255) {
+						*dest_pixel_ptr = (255u << 24) | (srcB << 16) | (srcG << 8) | srcR;
+					} else {
+						uint32_t destPixel = *dest_pixel_ptr;
+						uint8_t dr = (uint8_t)(destPixel & 0xFF);
+						uint8_t dg = (uint8_t)((destPixel >> 8) & 0xFF);
+						uint8_t db = (uint8_t)((destPixel >> 16) & 0xFF);
+						uint8_t blendR = (uint8_t)((srcR * srcAlpha + dr * (255 - srcAlpha)) / 255);
+						uint8_t blendG = (uint8_t)((srcG * srcAlpha + dg * (255 - srcAlpha)) / 255);
+						uint8_t blendB = (uint8_t)((srcB * srcAlpha + db * (255 - srcAlpha)) / 255);
+						*dest_pixel_ptr = (255u << 24) | (blendB << 16) | (blendG << 8) | blendR;
+					}
+				}
+			}
+		}
+
+		SDL_UnlockSurface(scaled_surface);
+	}
+
+	if (!was_locked_fast && SDL_MUSTLOCK(sdl_dest)) {
+		SDL_UnlockSurface(sdl_dest);
+	}
+
+	return 0;
 }
 
 int spritectl_blt_surface(spritectl_surface_t dest,
@@ -1308,11 +1753,84 @@ int spritectl_present_surface(spritectl_surface_t surface, void* renderer_ptr) {
 		return -1;
 	}
 
-	/* Create texture from surface */
-	SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, sdl_surface);
-	if (!texture) {
-		fprintf(stderr, "SpriteLib Backend: Failed to create texture: %s\n", SDL_GetError());
-		return -1;
+	/* Reuse one streaming texture across frames instead of creating and
+	 * destroying a brand new GPU texture every single present call - that
+	 * was the main reason this build's FPS was much lower than the legacy
+	 * DirectDraw client's even with vsync off: texture create/destroy is
+	 * one of the more expensive things you can do per-frame on a GPU, and
+	 * this ran on every present. Recreate only if the surface's size or
+	 * pixel format actually changes (rare - basically only on a mode/
+	 * resolution switch). */
+	static SDL_Texture* s_presentTexture = NULL;
+	static SDL_Renderer* s_presentRenderer = NULL;
+	static int s_presentW = 0, s_presentH = 0;
+	static Uint32 s_presentFormat = 0;
+
+	if (s_presentTexture == NULL ||
+	    s_presentRenderer != renderer ||
+	    s_presentW != sdl_surface->w ||
+	    s_presentH != sdl_surface->h ||
+	    s_presentFormat != sdl_surface->format->format) {
+		if (s_presentTexture != NULL) {
+			SDL_DestroyTexture(s_presentTexture);
+		}
+		s_presentTexture = SDL_CreateTexture(renderer, sdl_surface->format->format,
+		                                      SDL_TEXTUREACCESS_STREAMING,
+		                                      sdl_surface->w, sdl_surface->h);
+		if (!s_presentTexture) {
+			fprintf(stderr, "SpriteLib Backend: Failed to create texture: %s\n", SDL_GetError());
+			s_presentRenderer = NULL;
+			return -1;
+		}
+		s_presentRenderer = renderer;
+		s_presentW = sdl_surface->w;
+		s_presentH = sdl_surface->h;
+		s_presentFormat = sdl_surface->format->format;
+	}
+	SDL_Texture* texture = s_presentTexture;
+
+	/* Software gamma/brightness (see CSDLGraphics::ApplyGammaToBuffer) -
+	 * applied once here to the whole backbuffer right before upload,
+	 * mirroring how the old DirectDraw client's hardware gamma ramp acted
+	 * on the final composited frame rather than per-sprite. No-op (single
+	 * bool check) when the user hasn't touched the gamma slider and no
+	 * screen-tint event is active. */
+	if (!CSDLGraphics::IsGammaNeutral() && sdl_surface->format->BytesPerPixel == 2) {
+		CSDLGraphics::ApplyGammaToBuffer((uint16_t*)sdl_surface->pixels,
+		                                  sdl_surface->w, sdl_surface->h, sdl_surface->pitch);
+	}
+
+	SDL_UpdateTexture(texture, NULL, sdl_surface->pixels, sdl_surface->pitch);
+
+	/* Startup fade-in: the original client had no coded fade here either,
+	 * but a hard instant pop from black to the title art reads as broken
+	 * next to everything else being smooth - ramp alpha 0->255 over the
+	 * first ~500ms of real time (not frame count - with vsync off this can
+	 * run at 200+ fps, where a frame-counted ramp finishes in under 150ms
+	 * and barely reads as a fade at all). */
+	{
+		static Uint32 s_fadeStartMs = 0;
+		static bool s_fadeDone = false;
+		const Uint32 FADE_MS = 500;
+		if (!s_fadeDone) {
+			if (s_fadeStartMs == 0) {
+				s_fadeStartMs = SDL_GetTicks();
+			}
+			Uint32 elapsed = SDL_GetTicks() - s_fadeStartMs;
+			if (elapsed >= FADE_MS) {
+				s_fadeDone = true;
+				// texture is now cached/reused across frames (see above) -
+				// reset it back to normal opaque rendering once, or every
+				// frame from here on would stay stuck at the last partial
+				// fade alpha/blend mode this ever set.
+				SDL_SetTextureAlphaMod(texture, 255);
+				SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+			} else {
+				Uint8 fadeAlpha = (Uint8)(255 * elapsed / FADE_MS);
+				SDL_SetTextureAlphaMod(texture, fadeAlpha);
+				SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+			}
+		}
 	}
 
 	// DEBUG: Check texture format
@@ -1321,7 +1839,7 @@ int spritectl_present_surface(spritectl_surface_t surface, void* renderer_ptr) {
 		Uint32 format;
 		if (SDL_QueryTexture(texture, &format, NULL, NULL, NULL) == 0) {
 			const char* format_name = SDL_GetPixelFormatName(format);
-			fprintf(stderr, "Texture created: surface_format=%s, texture_format=%s\n",
+		SPRITELIB_SDL_LOG("Texture created: surface_format=%s, texture_format=%s\n",
 				SDL_GetPixelFormatName(sdl_surface->format->format), format_name);
 			texture_debug_count++;
 		}
@@ -1336,12 +1854,10 @@ int spritectl_present_surface(spritectl_surface_t surface, void* renderer_ptr) {
 
 	if (SDL_RenderCopy(renderer, texture, NULL, &dest_rect) != 0) {
 		fprintf(stderr, "SpriteLib Backend: Failed to render texture: %s\n", SDL_GetError());
-		SDL_DestroyTexture(texture);
 		return -1;
 	}
 
-	/* Clean up texture */
-	SDL_DestroyTexture(texture);
+	/* texture is cached across frames (s_presentTexture) - do not destroy it here */
 
 	return 0;
 }

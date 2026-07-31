@@ -11,10 +11,14 @@
 *********************************************************************/
 #include "Client_PCH.h"
 #ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <Windows.h>
+#endif
 #include <imagehlp.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #endif
 #include "CrashReport.h"
 #include "Properties.h"

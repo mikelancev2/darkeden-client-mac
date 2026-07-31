@@ -40,7 +40,11 @@
 
 // Only include what's needed
 #ifdef PLATFORM_WINDOWS
-	#include <Windows.h>
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <Windows.h>
+#endif
 #else
 	#include <sys/time.h>
 #endif

@@ -6,11 +6,15 @@
 //-----------------------------------------------------------------------------
 
 #include "Client_PCH.h"
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
+#if defined(PLATFORM_USE_SDL)
+#include <Platform.h>
+#else
 #include <WINDOWS.H>
 #include <nb30.h>
 #include <wsipx.h>
 #include <wsnwlink.h>
+#endif
 #else
 #include <netinet/in.h>
 // Windows networking headers not available on macOS/Linux

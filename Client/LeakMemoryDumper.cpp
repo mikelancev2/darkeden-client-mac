@@ -9,6 +9,11 @@
 
 #ifdef _DEBUG
 
+// Platform.h (used instead of <Windows.h> under PLATFORM_USE_SDL) doesn't
+// declare this real Win32 API.
+extern "C" __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputString);
+#define OutputDebugString OutputDebugStringA
+
 typedef struct {
 	DWORD	address;
 	DWORD	size;

@@ -11,7 +11,7 @@
 #ifdef PLATFORM_WINDOWS
 #include <wtypes.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #endif
 #include "mp3.h"
 #include <string.h>

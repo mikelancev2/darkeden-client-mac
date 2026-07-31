@@ -13,22 +13,25 @@
 #ifndef __SPRITELIBBACKEND_H__
 #define __SPRITELIBBACKEND_H__
 
-/* Close Platform.h's extern "C" block to manage our own */
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <Platform.h>
 
-#include "../basic/Platform.h"
-
-/* ============================================================================
+/* ============================================================================ 
  * Backend Selection
  * ============================================================================ */
 
 /* Define which backend to use */
 #ifdef SPRITELIB_BACKEND_SDL
-	#include <SDL.h>
+	#if __has_include(<SDL2/SDL.h>)
+		#include <SDL2/SDL.h>
+	#else
+		#include <SDL.h>
+	#endif
 #else
 	/* Windows/DirectDraw backend (original) */
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 /* ============================================================================
@@ -189,6 +192,26 @@ size_t spritectl_get_sprite_data(spritectl_sprite_t sprite, void* buffer, size_t
  */
 int spritectl_blt_sprite(spritectl_surface_t dest, int x, int y,
                          spritectl_sprite_t sprite, int flags, int alpha);
+
+/**
+ * Shadow "darken" blit: for every non-transparent (non-zero) pixel of
+ * sprite, darkens the EXISTING destination pixel in place by right-
+ * shifting each of its R/G/B channels independently by darkBits (matching
+ * the original DirectDraw client's CShadowSprite::BltDarkness /
+ * memcpyShadowDarkness - a real "multiply destination by 1/2^darkBits"
+ * shadow, not a flat color paint). sprite's own pixel color is ignored -
+ * only whether each pixel is the transparent marker (0x0000) or not
+ * matters. Only supports RGB565 sprites/destinations (the only format
+ * CShadowSprite ever produces).
+ * @param dest Destination surface handle
+ * @param x Destination X position
+ * @param y Destination Y position
+ * @param sprite Source sprite handle (shape mask only, RGB565, 0x0000=transparent)
+ * @param darkBits Number of bits to shift each channel down by (old client always used 1)
+ * @return 0 on success, non-zero on failure
+ */
+int spritectl_blt_shadow_darken(spritectl_surface_t dest, int x, int y,
+                                spritectl_sprite_t sprite, int darkBits);
 
 /**
  * Blit sprite to surface with scaling

@@ -10,10 +10,14 @@
 // Include files
 //-----------------------------------------------------------------------------
 #ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <Windows.h>
+#endif
 #include <MMSystem.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #endif
 #include <string>
 #include "TextSystem/TextService.h"
@@ -68,8 +72,6 @@ CWaitUIUpdate::Init()
 	dxlib_input_set_textinput_callback(SDLTextInputEvent);
 	dxlib_input_set_textediting_callback(SDLTextEditingEvent);
 	dxlib_input_start_text();  // Enable SDL text input
-	printf("DEBUG: SDL text input enabled, callback set to %p\n", (void*)SDLTextInputEvent);
-	fflush(stdout);
 }
 
 //-----------------------------------------------------------------------------
@@ -778,19 +780,34 @@ CWaitUIUpdate::UpdateDraw()
 	{
 		POINT point;
 
-		static DWORD oldTime = timeGetTime();
+		static DWORD titleFadeStartTime = 0;
 
 		gC_vs_ui.Show();
 
 		if(g_TitleSpriteAlpha > 0)
 		{
-			int alpha = (int)(31-(timeGetTime()-oldTime)*16/1000);
+			DWORD now = timeGetTime();
+			if (titleFadeStartTime == 0)
+			{
+				titleFadeStartTime = now;
+			}
+
+			const DWORD TITLE_HOLD_MS = 300;
+			const DWORD TITLE_FADE_MS = 6000;
+			DWORD elapsed = now - titleFadeStartTime;
+			int alpha = 31;
+			if (elapsed > TITLE_HOLD_MS)
+			{
+				DWORD fadeElapsed = elapsed - TITLE_HOLD_MS;
+				alpha = (int)(31 - (fadeElapsed * 31 / TITLE_FADE_MS));
+			}
 			g_TitleSpriteAlpha = (alpha > 0) ? alpha : 0;
 			DrawTitleLoading();
 
 			if(g_TitleSpriteAlpha <= 0)
 			{
-				EndTitleLoading(true);
+				titleFadeStartTime = 0;
+				EndTitleLoading(false);
 			}
 		}
 				
@@ -937,8 +954,6 @@ CWaitUIUpdate::UpdateDraw()
 		//-----------------------------------------------------------------
 		// Mouse 그리기
 		//-----------------------------------------------------------------
-		gC_vs_ui.DrawMousePointer();
-
 		#ifdef OUTPUT_DEBUG
 			if (g_pUserOption->DrawFPS)
 			{
@@ -960,6 +975,7 @@ CWaitUIUpdate::UpdateDraw()
 		point.y = 0;
 		RECT rect = { 0, 0, g_GameRect.right, g_GameRect.bottom };
 		g_pBack->BltNoColorkey( &point, g_pLast, &rect );	
+		gC_vs_ui.DrawMousePointer();
 
 		// 창모드에서 3D가속 안한 경우에..
 		// 왜 이거 하니까 빨라지지? - -;

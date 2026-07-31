@@ -906,7 +906,7 @@ void C_VS_UI_DIALOG::SetMessage(char ** sz_msg, UINT line_count, SETMESSAGE_MODE
 		}
 	}
 
-	if(!m_vs_msg.empty()) 
+	if(!m_vs_msg.empty())
 		m_line_count = m_vs_msg.size();
 	else
 		m_line_count=0;
@@ -916,7 +916,7 @@ void C_VS_UI_DIALOG::SetMessage(char ** sz_msg, UINT line_count, SETMESSAGE_MODE
 	const int _EXTRA = 30;//2;
 	if(h == -1)
 	{
-		h = m_line_count*m_message_str_height;		// Rect �� ���̴� �޽���â�� ���̷� ���Ѵ�. 
+		h = m_line_count*m_message_str_height;		// Rect �� ���̴� �޽���â�� ���̷� ���Ѵ�.
 		if(m_menu_count > 0)
 			h += 14 + m_menu_rect.h;
 
@@ -945,12 +945,12 @@ void C_VS_UI_DIALOG::SetMessage(char ** sz_msg, UINT line_count, SETMESSAGE_MODE
 					width = menuMetrics.width;
 				}
 			}
-			else 
+			else
 			{
 				width = 0;
 				height = 0;
 			}
-			
+
 			m_pC_button_group->Add(new C_VS_UI_EVENT_BUTTON(m_menu_rect.x,
 				m_menu_rect.y+plus, 
 				width,
@@ -990,7 +990,7 @@ void C_VS_UI_DIALOG::SetMessage(char ** sz_msg, UINT line_count, SETMESSAGE_MODE
 		m_print_line_count = (m_msg_rect.h)/m_message_str_height;
 	}
 	if (mode == SMO_NOFIT)
-	{		
+	{
 		m_nofit_mode_msg_y = m_msg_rect.y+m_msg_rect.h/2-(m_message_str_height*line_count)/2; // sort in center
 	}
 	else if (m_line_count > m_print_line_count)				// ��¹����� �����Ƿ� ScrollBar �� �����Ѵ�.
@@ -1047,7 +1047,7 @@ void C_VS_UI_DIALOG::SetMessage(char ** sz_msg, UINT line_count, SETMESSAGE_MODE
 				m_menu_y_size-=len_menu;	
 			} else
 			{				
-				m_pC_menu_scroll_bar=new C_VS_UI_SCROLL_BAR(len_menu-m_menu_rect.h, 
+				m_pC_menu_scroll_bar=new C_VS_UI_SCROLL_BAR(len_menu-m_menu_rect.h,
 					Rect(m_menu_rect.w+20, 14, -1,m_menu_rect.h-20));
 			}
 		}

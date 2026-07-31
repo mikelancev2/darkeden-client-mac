@@ -6,9 +6,13 @@
 #define __SHOWTIMECHECKER_H__
 
 #ifdef PLATFORM_WINDOWS
-#include <Windows.h>
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-#include "../../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+#include <Platform.h>
 
 #include <fstream>
 using namespace std;

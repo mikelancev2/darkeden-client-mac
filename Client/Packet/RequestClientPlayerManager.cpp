@@ -17,8 +17,12 @@
 #include "ClientDef.h"
 
 // Platform-specific threading includes
-#ifdef PLATFORM_WINDOWS
-	#include <windows.h>
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <windows.h>
+#endif
 	#include <process.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__EMSCRIPTEN__)
 	#include <pthread.h>

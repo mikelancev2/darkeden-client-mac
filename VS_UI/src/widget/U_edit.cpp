@@ -6,7 +6,11 @@
 #include <string.h>
 
 #ifdef PLATFORM_MACOS
+#if __has_include(<SDL2/SDL.h>)
 #include <SDL2/SDL.h>
+#else
+#include <SDL.h>
+#endif
 #include "../../../Client/TextSystem/TextService.h"
 #include "../../../Client/TextSystem/RenderTargetSpriteSurface.h"
 #include "../../../Client/SpriteLib/CSpriteSurface.h"
@@ -566,7 +570,7 @@ void LineEditorVisual::Show() const
 		int cursorX = m_X;
 		if (m_Editor.m_CursorPos > 0) {
 			char cursorBuffer[1024];
-			const char* fullText = m_Editor.GetBuffer();
+			const char* fullText = textToDisplay;
 
 			// Convert cursor position to bytes (UTF-8 aware)
 			int bytePos = 0;

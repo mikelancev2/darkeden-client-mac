@@ -17,9 +17,17 @@
 #include <SDL.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <errno.h>
+#include <sys/stat.h>
+
+#ifdef PLATFORM_WIN32_HOST
+	#include <direct.h>
+	#ifndef PATH_MAX
+		#define PATH_MAX 4096
+	#endif
+#else
+	#include <unistd.h>
+#endif
 
 #ifdef PLATFORM_LINUX
 	#include <limits.h>
@@ -247,12 +255,21 @@ void platform_lib_free(platform_lib_t lib) {
  * ============================================================================ */
 
 char platform_get_path_separator(void) {
+#ifdef PLATFORM_WIN32_HOST
+	return '\\';
+#else
 	return '/';
+#endif
 }
 
 int platform_file_exists(const char* filename) {
+#ifdef PLATFORM_WIN32_HOST
+	struct _stat st;
+	return (_stat(filename, &st) == 0);
+#else
 	struct stat st;
 	return (stat(filename, &st) == 0);
+#endif
 }
 
 int platform_get_executable_dir(char* buffer, size_t size) {
@@ -260,7 +277,14 @@ int platform_get_executable_dir(char* buffer, size_t size) {
 
 	char path[PATH_MAX] = {0};
 
-	#ifdef PLATFORM_MACOS
+	#ifdef PLATFORM_WIN32_HOST
+		char* basePath = SDL_GetBasePath();
+		if (basePath == NULL) return 1;
+		strncpy(buffer, basePath, size - 1);
+		buffer[size - 1] = '\0';
+		SDL_free(basePath);
+		return 0;
+	#elif defined(PLATFORM_MACOS)
 		uint32_t bufsize = sizeof(path);
 		if (_NSGetExecutablePath(path, &bufsize) != 0) {
 			return 1;
@@ -273,6 +297,7 @@ int platform_get_executable_dir(char* buffer, size_t size) {
 		return 1;
 	#endif
 
+	#ifndef PLATFORM_WIN32_HOST
 	/* Extract directory */
 	char* dir = dirname(path);
 	if (dir == NULL) return 1;
@@ -283,10 +308,15 @@ int platform_get_executable_dir(char* buffer, size_t size) {
 	strcpy(buffer, dir);
 	strcat(buffer, "/");
 	return 0;
+	#else
+	return 1;
+	#endif
 }
 
 int platform_create_directory(const char* path) {
-	#ifdef PLATFORM_LINUX
+	#ifdef PLATFORM_WIN32_HOST
+		return _mkdir(path) == 0 ? 0 : 1;
+	#elif defined(PLATFORM_LINUX)
 		return mkdir(path, 0755) == 0 ? 0 : 1;
 	#else
 		return mkdir(path, 0755) == 0 ? 0 : 1;

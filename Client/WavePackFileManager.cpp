@@ -3,6 +3,41 @@
 //--------------------------------------------------------------------------
 #include "Client_PCH.h"
 #include "WavePackFileManager.h"
+#ifdef PLATFORM_USE_SDL
+#include "Profiler.h"
+
+WavePackFileManager*	g_pWavePackFileManager = NULL;
+
+bool
+WavePackFileInfo::SaveToFileData(std::ofstream& file)
+{
+	(void)file;
+	return false;
+}
+
+LPDIRECTSOUNDBUFFER
+WavePackFileInfo::LoadFromFileData(std::ifstream& file)
+{
+	(void)file;
+	return NULL;
+}
+
+WavePackFileManager::WavePackFileManager()
+{
+}
+
+WavePackFileManager::~WavePackFileManager()
+{
+}
+
+LPDIRECTSOUNDBUFFER
+WavePackFileManager::LoadFromFileData(TYPE_SOUNDID id)
+{
+	(void)id;
+	return NULL;
+}
+
+#else
 #include <MMSystem.h>
 #include "CDirectSound.h"
 #include "Profiler.h"
@@ -176,3 +211,4 @@ WavePackFileManager::LoadFromFileData(TYPE_SOUNDID id)
 	__END_PROFILE("WavePackFileManager-Load")
 	return NULL;
 }
+#endif

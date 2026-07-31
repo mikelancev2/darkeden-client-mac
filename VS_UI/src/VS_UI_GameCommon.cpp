@@ -40,6 +40,7 @@
 #include "MHelpDef.h"
 #include "VS_UI_ExtraDialog.h"
 #include "DebugInfo.h"
+#include "../../Client/Profiler.h"
 
 #ifdef __TEST_SUB_INVENTORY__   // add by Coffee 2007-8-9 ���Ӱ��а�
 	#include "MItemFinder.h"
@@ -730,12 +731,18 @@ C_VS_UI_TRIBE::C_VS_UI_TRIBE()
 	AttrKeyboardControl(true);
 	
 	AttrPin(true);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: before new C_VS_UI_INVENTORY\n"); fclose(f); } }
 	m_pC_inventory = new C_VS_UI_INVENTORY;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: before new C_VS_UI_QUEST_STATUS\n"); fclose(f); } }
 	m_pC_quest_status = new C_VS_UI_QUEST_STATUS;
-	
+
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: before new C_VS_UI_HPBAR\n"); fclose(f); } }
 	m_pC_hpbar = new C_VS_UI_HPBAR;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: before new C_VS_UI_EFFECT_STATUS\n"); fclose(f); } }
 	m_pC_effect_status = new C_VS_UI_EFFECT_STATUS;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: before new C_VS_UI_MINIMAP\n"); fclose(f); } }
 	m_pC_minimap = new C_VS_UI_MINIMAP;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: before new C_VS_UI_FRIEND_INFO\n"); fclose(f); } }
 
 	//add by viva : friend system
 	m_pC_friend = new C_VS_UI_FRIEND_INFO;
@@ -747,15 +754,18 @@ C_VS_UI_TRIBE::C_VS_UI_TRIBE()
 
 	//  add by Coffee ���������ͼ
 //	m_pC_worldmap = new C_VS_UI_WORLDMAP;
-	//  end 
+	//  end
 	m_pC_chatting = NULL;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: before new C_VS_UI_SKILL\n"); fclose(f); } }
 	m_pC_skill = new C_VS_UI_SKILL;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: before ButtonGroups\n"); fclose(f); } }
 	m_pC_common_button_group = new ButtonGroup(this);
 	m_pC_menu_button_group = new ButtonGroup(this);
 	m_pC_guild_button_group = new ButtonGroup(this);
 	m_pC_msg_button_group = new ButtonGroup(this);
 	m_pC_util_button_group = new ButtonGroup(this);
 	m_pC_help_button_group = new ButtonGroup(this);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_TRIBE ctor: end reached OK\n"); fclose(f); } }
 	m_pC_level_up = NULL;
 	
 	// TIMER
@@ -4026,7 +4036,7 @@ void	C_VS_UI_CHATTING::AddToChatHistory(const char * sz_str, const char * sz_id,
 	//
 	m_pC_history_list.Add(sz_id, sz_str, condition, color);	// by larosel
 	//	}
-	
+
 	//	DeleteNewArray(p_temp);
 	if(m_pC_scroll_bar->GetScrollPos() == 0)
 		ResetScroll();
@@ -4937,14 +4947,17 @@ void C_VS_UI_CHATTING::Show()
 			else
 				if(!Timer())				// Chating Color Setting. Timer....(���� �� �� ä�ý� ����)
 					m_lev_chatting.SetInputStringColor(g_pUserOption->ChattingColor);
+			__BEGIN_PROFILE("Chat_LevShow")
 			m_lev_chatting.Show();
+			__END_PROFILE("Chat_LevShow")
 		}
-	}	
-	g_FL2_GetDC();	
+	}
+	g_FL2_GetDC();
+	__BEGIN_PROFILE("Chat_HistoryLoop")
 	for (int i=0, line = 0, scroll = 0; line < g_HISTORY_LINE; line++, i++)
 	{
 		// by larosel
-		C_VS_UI_CHAT_LINE * p_line;	
+		C_VS_UI_CHAT_LINE * p_line;
 		p_line = m_pC_history_list.GetLine(i);
 		
 		const int _ID_GAP = 2;
@@ -5064,6 +5077,7 @@ void C_VS_UI_CHATTING::Show()
 			}
 		}
 	}
+	__END_PROFILE("Chat_HistoryLoop")
 	if(gap)
 	{
 		m_pC_input_button_group->ShowDescription();
@@ -11958,16 +11972,17 @@ C_VS_UI_INFO::C_VS_UI_INFO()
 		SetRect(&m_rcSkillDesciption, 26, 74, 263, 206+4);
 		Set(g_GameRect.right/2 - 336/2, g_GameRect.bottom/2 - 335/2, 336, 335);
 		break;
-	}	
-	
+	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_INFO ctor: after petButtonSpk race switch, before scroll bars/buttons\n"); fclose(f); } }
+
 	g_RegisterWindow(this);
-		
-	
+
+
 	AttrTopmost(false);
 	AttrPin(true);
-	
+
 	g_RegisterWindow(this);
-	
+
 	//��ũ�ѹ�
 	m_pC_char_scroll_bar = NULL;
 	m_pC_skill_scroll_bar = NULL;
@@ -12418,10 +12433,13 @@ C_VS_UI_INFO::C_VS_UI_INFO()
 	
 	
 
-	Run(m_iGrade);	
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_INFO ctor: before Run(m_iGrade)\n"); fclose(f); } }
+	Run(m_iGrade);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_INFO ctor: after Run, before RefreshImage\n"); fclose(f); } }
 	// profile
 	m_p_face = NULL;
 	RefreshImage();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_INFO ctor: after RefreshImage, end reached OK\n"); fclose(f); } }
 	m_modify_wide = 10;
 	m_advance_skill_count = 0;
 

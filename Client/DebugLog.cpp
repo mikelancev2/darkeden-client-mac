@@ -10,18 +10,22 @@
 #include <string.h>
 #include <time.h>
 
-#ifdef PLATFORM_WINDOWS
-	#include <windows.h>
+#if defined(PLATFORM_WINDOWS) || defined(_WIN32) || defined(_WIN64)
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <windows.h>
+#endif
 	#include <sys/timeb.h>
 #else
 	#include <sys/time.h>
 #endif
 
 // Platform-specific includes
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(_WIN32) || defined(_WIN64)
 	#define PLATFORM_LOCK_INITIALIZED 1
 #else
-	#include "../../basic/Platform.h"
+	#include <Platform.h>
 #endif
 
 //-----------------------------------------------------------------------------
@@ -38,7 +42,7 @@ typedef struct {
 
 static LogConfig g_config = {
 	LOG_LEVEL_INFO,		// Default level
-	true,				// Console output enabled
+	false,				// Console output disabled by default for player builds
 	false,				// File output disabled
 	false,				// Array output disabled
 	"",					// Log file path
@@ -82,7 +86,7 @@ static const char* get_level_string(LogLevel level) {
 // Get timestamp with milliseconds
 // Format: "2024-01-20 23:45:12.123"
 static void get_timestamp(char *buffer, size_t size) {
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(_WIN32) || defined(_WIN64)
 	struct _timeb timebuf;
 	_ftime(&timebuf);
 	struct tm *tm_info = localtime(&timebuf.time);
@@ -131,13 +135,16 @@ void log_init(void) {
 
 	g_initialized = true;
 
-	// Log initialization message directly to stderr (avoiding lock)
-	fprintf(stderr, "[DEBUG LOG] Logging system initialized (level: %s)\n",
-			g_config.level == LOG_LEVEL_DEBUG ? "DEBUG" :
-			g_config.level == LOG_LEVEL_INFO ? "INFO" :
-			g_config.level == LOG_LEVEL_WARN ? "WARN" :
-			g_config.level == LOG_LEVEL_ERROR ? "ERROR" : "NONE");
-	fflush(stderr);
+#ifdef _DEBUG
+	if (g_config.output_to_console) {
+		fprintf(stderr, "[DEBUG LOG] Logging system initialized (level: %s)\n",
+				g_config.level == LOG_LEVEL_DEBUG ? "DEBUG" :
+				g_config.level == LOG_LEVEL_INFO ? "INFO" :
+				g_config.level == LOG_LEVEL_WARN ? "WARN" :
+				g_config.level == LOG_LEVEL_ERROR ? "ERROR" : "NONE");
+		fflush(stderr);
+	}
+#endif
 }
 
 void log_cleanup(void) {
@@ -145,9 +152,12 @@ void log_cleanup(void) {
 		return;
 	}
 
-	// Log shutdown message directly to stderr (avoiding potential lock issues)
-	fprintf(stderr, "[DEBUG LOG] Logging system shutting down\n");
-	fflush(stderr);
+#ifdef _DEBUG
+	if (g_config.output_to_console) {
+		fprintf(stderr, "[DEBUG LOG] Logging system shutting down\n");
+		fflush(stderr);
+	}
+#endif
 
 	// Close log file if open
 	if (g_config.log_fp != NULL) {

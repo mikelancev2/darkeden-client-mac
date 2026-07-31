@@ -31,8 +31,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#ifdef PLATFORM_WINDOWS
-	#include <windows.h>
+#if defined(PLATFORM_WINDOWS) && !defined(PLATFORM_USE_SDL)
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <windows.h>
+#endif
 	#include <MMSystem.h>
 	#include <Digitalv.h>
 	#include <DDraw.h>
@@ -41,9 +45,15 @@
 	#pragma warning(pop)
 #else
 	/* Use platform abstraction layer */
-	#include "../basic/Platform.h"
-	#include <SDL2/SDL.h>
-	#include <unistd.h>
+	#include <Platform.h>
+#if __has_include(<SDL2/SDL.h>)
+#include <SDL2/SDL.h>
+#else
+#include <SDL.h>
+#endif
+	#if !defined(_WIN32) && !defined(_WIN64)
+		#include <unistd.h>
+	#endif
 #endif
 
 //#include "GAME1024.h"

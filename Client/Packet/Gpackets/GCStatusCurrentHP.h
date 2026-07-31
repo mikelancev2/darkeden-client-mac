@@ -44,9 +44,9 @@ public :
 	// get packet's body size
 	// *OPTIMIZATION HINT*
 	// const static GCStatusCurrentHPPacketSize 를 정의, 리턴하라.
-	PacketSize_t getPacketSize () const throw () 
-	{ 
-		return szObjectID + szHP; 
+	PacketSize_t getPacketSize () const throw ()
+	{
+		return szObjectID + szHP + szBYTE;
 	}
 
 	#ifdef __DEBUG_OUTPUT__
@@ -67,13 +67,20 @@ public :
 	HP_t getCurrentHP() const throw() { return m_CurrentHP; }
 	void setCurrentHP( HP_t CurrentHP ) throw() { m_CurrentHP = CurrentHP; }
 
+	// get/set critical hit flag (ported from client-master - see
+	// MTopView::DrawCreatureHPModify for the yellow-vs-white damage number)
+	bool getCritical() const throw() { return m_bCritical; }
+	void setCritical( bool bCritical ) throw() { m_bCritical = bCritical; }
+
 private :
-	
+
     // 존 레벨에서 유니크한 아이디로 객체 구분을 위해서 사용한다.
     ObjectID_t m_ObjectID;
 
 	// 몬스터 현재 체력
 	HP_t m_CurrentHP;
+
+	bool m_bCritical;
 
 };
 
@@ -104,9 +111,9 @@ public :
 	// get packet's body size
 	// *OPTIMIZATION HINT*
 	// const static GCStatusCurrentHPPacketSize 를 정의, 리턴하라.
-	PacketSize_t getPacketMaxSize () const throw () 
-	{ 
-		return szObjectID + szHP; 
+	PacketSize_t getPacketMaxSize () const throw ()
+	{
+		return szObjectID + szHP + szBYTE;
 	}
 
 };

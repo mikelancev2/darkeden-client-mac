@@ -15,6 +15,7 @@
 #include "TextSystem/RenderTargetSpriteSurface.h"
 #include "TextSystem/TextTypes.h"
 #include "TextSystem/FontHandleUtil.h"
+#include "SpriteLib/CSpriteSurface.h"
 
 class CSpriteSurface;
 extern CSpriteSurface* g_pLast;
@@ -50,10 +51,9 @@ void g_SetFL2Surface(void* pSurface)
 //----------------------------------------------------------------------
 // OpenGL Initialization
 //----------------------------------------------------------------------
-bool InitializeGL(int width, int height, int bpp, int fullscreen)
+void InitializeGL(int width, int height, int bpp, int fullscreen)
 {
     // Stub: SDL backend handles this
-    return true;
 }
 
 //----------------------------------------------------------------------
@@ -67,6 +67,41 @@ void rectangle(S_SURFACEINFO* pSurfaceInfo, Rect* pRect, int color)
 void FillRect(S_SURFACEINFO* pSurfaceInfo, Rect* pRect, int color)
 {
     // Stub: Would fill rectangle
+}
+
+// Real implementation of the int-corners overload (the Rect*-based one above
+// is still an unported stub). Backbuffer pixels are always 16bpp 555/565
+// (see SpriteLib/SpriteLibBackendSDL.h) - both formats agree on saturated
+// colors like RED/LIGHTRED, so a raw 16-bit write is format-agnostic here.
+void rectangle(S_SURFACEINFO* pInfo, int lx, int ly, int rx, int ry, int color)
+{
+    if (pInfo == NULL || pInfo->p_surface == NULL)
+        return;
+
+    if (lx > rx) { int t = lx; lx = rx; rx = t; }
+    if (ly > ry) { int t = ly; ly = ry; ry = t; }
+
+    if (lx < 0) lx = 0;
+    if (ly < 0) ly = 0;
+    if (rx >= pInfo->width) rx = pInfo->width - 1;
+    if (ry >= pInfo->height) ry = pInfo->height - 1;
+    if (lx > rx || ly > ry)
+        return;
+
+    unsigned short* pixels = (unsigned short*)pInfo->p_surface;
+    int stride = pInfo->pitch / sizeof(unsigned short);
+    unsigned short c = (unsigned short)color;
+
+    for (int x = lx; x <= rx; x++)
+    {
+        pixels[ly * stride + x] = c;
+        pixels[ry * stride + x] = c;
+    }
+    for (int y = ly; y <= ry; y++)
+    {
+        pixels[y * stride + lx] = c;
+        pixels[y * stride + rx] = c;
+    }
 }
 
 //----------------------------------------------------------------------

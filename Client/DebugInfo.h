@@ -35,7 +35,11 @@
 
 
 	//#ifdef	_DEBUG
-		#include <Windows.h>
+		#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <Windows.h>
+#endif
 		#include <WinBase.h>
 		#include <stdio.h> 
 		#include <stdarg.h>
@@ -78,9 +82,19 @@
 
 	// debug가 아닌 경우..
 	#else
+		// If DebugLog.h was already included in this translation unit, its
+		// real DEBUG_ADD (routes to log_write/the file logger) is already
+		// defined - don't clobber it with the no-op stub below. This used to
+		// unconditionally stub DEBUG_ADD et al. to ((void)0) in Release
+		// builds, silently swallowing every diagnostic in any .cpp that
+		// includes DebugInfo.h before (or instead of) DebugLog.h - e.g.
+		// UIMessageManager.cpp's Execute_UI_LOGIN - making login/socket
+		// failures impossible to trace. Files that need real logging but
+		// don't already get DebugLog.h transitively should #include
+		// "DebugLog.h" directly rather than relying on this fallback.
 		#define	DEBUG_MESSAGE(debugMessage)	((void)0)
 
-		// Empty macro stubs for release builds
+		#ifndef DEBUG_ADD
 		#define	DEBUG_ADD(message)				((void)0)
 		#define	DEBUG_ADD_ERR(message)			((void)0)
 		#define	DEBUG_ADD_WAR(message)			((void)0)
@@ -88,9 +102,10 @@
 		#define	DEBUG_ADD_FORMAT(format, ...)	((void)0)
 		#define	DEBUG_ADD_FORMAT_ERR(format, ...)	((void)0)
 		#define	DEBUG_ADD_FORMAT_WAR(format, ...)	((void)0)
+		#endif
 
 //		#define	DEBUG_NEW			new
-	#endif	
+	#endif
 
 
 #endif

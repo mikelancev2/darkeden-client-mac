@@ -158,7 +158,16 @@ class CREATURETABLE_INFO {
 		void				SetActionCount(int n, int count)		{ m_pActionCount[n] = count; }
 
 		enum CREATURETRIBE	GetCreatureTribe() const				{ return m_CreatureTribe; }
-		int					GetActionCount(int n)					{ return m_pActionCount[n]; }
+		// fix: this lacked the same n<m_nMaxAction bounds check GetActionSound
+		// has below, despite m_pActionCount/m_pActionSound being allocated
+		// with the identical size in InitActionType(). An out-of-range action
+		// index (e.g. a creature whose actual action-table size is smaller
+		// than the max) read uninitialized heap memory here, which - after
+		// being truncated to a BYTE as m_ActionCountMax in
+		// GetCreatureActionCountMax() - could produce an oversized frame
+		// count and leave the creature stuck in its hit/bleeding pose far
+		// longer than intended.
+		int					GetActionCount(int n)					{ if (n >= 0 && n < m_nMaxAction) return m_pActionCount[n]; else return 0; }
 		TYPE_SOUNDID		GetActionSound(int n)					{ if (n >= 0 && n < m_nMaxAction) return m_pActionSound[n]; else return SOUNDID_NULL; }		
 		int					GetActionMax() const;
 		

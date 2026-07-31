@@ -5,7 +5,7 @@
 // Áö±Ý UI¿¡¼­ Å¸ÀÌ¹Ö ¹®Á¦°¡ ÀÖ¾î¼­ ¸ø °íÄ¡°í ÀÖÀ½.
 //-----------------------------------------------------------------------------
 #include "Client_PCH.h"
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
 #include <io.h>
 #include <process.h>
 #endif
@@ -47,7 +47,9 @@
 #include "ProfileManager.h"
 #include "CGameUpdate.h"
 #include "MTestDef.h"
-
+#if defined(PLATFORM_WIN32_HOST)
+#include <io.h>
+#endif
 #include "Packet/CPackets/CGRequestNewbieItem.h"
 #include "Packet/CPackets/CGSilverCoating.h"
 #include "Packet/CPackets/CLChangeServer.h"
@@ -111,6 +113,7 @@
 #include "RankBonusTable.h"
 #include "Profiler.h"
 
+#include "DebugLog.h"
 #include "DebugInfo.h"
 #include "MEventManager.h"
 #include "MOustersGear.h"

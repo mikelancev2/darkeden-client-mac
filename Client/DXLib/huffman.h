@@ -4,7 +4,7 @@
 #ifdef PLATFORM_WINDOWS
 #include <wtypes.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #endif
 #include "bit_res.h"
 

@@ -12257,8 +12257,13 @@ MPlayer::ChangeToVampire()
 // 캐릭터의 상태값을 바꾼다.
 //----------------------------------------------------------------------
 void	
-MPlayer::SetStatus(DWORD n, DWORD value)
-{ 
+MPlayer::SetStatus(DWORD n, DWORD value, bool bCritical)
+{
+	// bCritical is unused here: damage taken by the player themself is
+	// always shown red (see MTopView::DrawCreatureHPModify); critical only
+	// changes the color for damage the player DEALS (MCreature::SetStatus).
+	(void)bCritical;
+
 	if (n >= MODIFY_MAX)
 	{
 		DEBUG_ADD_FORMAT("[Error] Modify Part is Wrong : part=%d, value=%d", n, value);
@@ -12278,6 +12283,15 @@ MPlayer::SetStatus(DWORD n, DWORD value)
 
 	// 다시.. - -;
 	m_Status[n] = modifyValue.newValue;
+
+	// Floating damage number (see MCreature::SetStatus, which already does
+	// this for other creatures/players seen in the world) - MPlayer (the
+	// player themself) had no AddHPModify call, so damage taken by your own
+	// character never floated, only the HP bar changed.
+	if ( n == MODIFY_CURRENT_HP )
+	{
+		AddHPModify( (int)modifyValue.newValue - (int)modifyValue.oldValue );
+	}
 }
 
 //----------------------------------------------------------------------

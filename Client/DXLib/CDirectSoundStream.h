@@ -12,7 +12,7 @@
 #define NUM_PLAY_NOTIFICATIONS  16
 
 /* Platform-independent includes (SDL2 backend on all platforms) */
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #include "../../basic/AudioTypes.h"
 
 /* Forward declarations for DirectSound types (opaque pointers) */

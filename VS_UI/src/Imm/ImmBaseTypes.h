@@ -36,7 +36,11 @@
 #pragma once
 #endif // _MSC_VER >= 1000
 
-//#include <windows.h>
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <windows.h>
+#endif
 #ifdef PLATFORM_WINDOWS
 #include "FeelitApi.h"
 #endif

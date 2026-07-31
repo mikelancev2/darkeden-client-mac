@@ -8,9 +8,13 @@
 #define	__MSTATUS_H__
 
 #ifdef PLATFORM_WINDOWS
-#include <Windows.h>
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-#include "../../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+#include <Platform.h>
 #endif
 #include "Packet/Types/ModifyDef.h"
 
@@ -27,7 +31,13 @@ class MStatus {
 		//-------------------------------------------
 		// n번째 값을 value로 만든다.
 		//-------------------------------------------
-		virtual void	SetStatus(DWORD n, DWORD value)	{ m_Status[n] = value; }
+		// NOTE: MCreature::SetStatus/MPlayer::SetStatus take a 3rd bool
+		// bCritical = false param. This base declaration must match exactly
+		// (default args don't count for override matching) or callers going
+		// through a MStatus* (e.g. AffectModifyInfo() in PacketFunction.cpp)
+		// silently call THIS stub instead of the real override - which skips
+		// g_pModifyStatusManager::Execute/AddHPModify entirely.
+		virtual void	SetStatus(DWORD n, DWORD value, bool bCritical = false)	{ m_Status[n] = value; }
 
 		//-------------------------------------------
 		// n번째 값 읽어오기

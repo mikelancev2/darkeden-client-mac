@@ -11,7 +11,7 @@
 
 /* Platform detection */
 #if defined(_WIN32) || defined(_WIN64)
-	#ifndef PLATFORM_WINDOWS
+	#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_USE_SDL)
 		#define PLATFORM_WINDOWS
 	#endif
 #elif defined(__APPLE__)
@@ -24,7 +24,7 @@
 #include "Types.h"
 #include "Exception.h"
 
-#if defined(PLATFORM_WINDOWS)
+#if defined(PLATFORM_WINDOWS) && !defined(PLATFORM_USE_SDL)
 #include <WinSock.h>
 #elif defined(PLATFORM_LINUX) || defined(PLATFORM_MACOS)
 #include <netinet/in.h>

@@ -11,9 +11,13 @@
 // IMPORTANT: Include Platform.h BEFORE PCH to get correct CRITICAL_SECTION size
 // This prevents incomplete type issues with ProfileManager
 #ifdef PLATFORM_WINDOWS
-	#include <Windows.h>
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-	#include "../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+	#include <Platform.h>
 #endif
 
 #include "Client_PCH.h"

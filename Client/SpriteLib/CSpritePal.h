@@ -3,9 +3,13 @@
 #define __CSPRITE_PAL__
 
 #ifdef PLATFORM_WINDOWS
-	#include <windows.h>
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-	#include "../basic/Platform.h"
+#include <windows.h>
+#endif
+#else
+	#include <Platform.h>
 #endif
 
 #include "CTypePack.h"

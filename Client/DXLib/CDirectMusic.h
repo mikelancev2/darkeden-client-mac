@@ -6,7 +6,7 @@
 #define __CSDLMUSIC_H__
 
 /* Platform-independent includes (SDL2 backend on all platforms) */
-#include "../../basic/Platform.h"
+#include <Platform.h>
 
 /* Forward declarations for DirectMusic types (opaque pointers) */
 /* The actual implementation uses SDL_mixer for all platforms */

@@ -9550,7 +9550,7 @@ MCreature::PacketSpecialActionToSelf(TYPE_ACTIONINFO nActionInfo, MActionResult*
 // Set Status
 //----------------------------------------------------------------------
 void	
-MCreature::SetStatus(DWORD n, DWORD value)
+MCreature::SetStatus(DWORD n, DWORD value, bool bCritical)
 {
 	if(n >= MAX_MODIFY)
 		return;
@@ -9598,7 +9598,7 @@ MCreature::SetStatus(DWORD n, DWORD value)
 		case MODIFY_CURRENT_HP :
 			{
 				const int localValue = min(GetMAX_HP()-GetSilverDamage(), value);
-				AddHPModify( localValue - oldValue );
+				AddHPModify( localValue - oldValue, bCritical );
 
 				// max¸¦ ¾È ³Ñ°Ô
 				m_Status[n] = localValue;	
@@ -10606,10 +10606,10 @@ MCreature::StopAbsorb()
 }
 
 void
-MCreature::AddHPModify(const int modify)
+MCreature::AddHPModify(const int modify, bool bCritical)
 {
-	m_HPModifyList.push_back(HPModify(modify, GetTickCount()));
-	if(m_HPModifyList.size() > g_pClientConfig->HPModifyListMax)m_HPModifyList.pop_front(); 
+	m_HPModifyList.push_back(HPModify(modify, GetTickCount(), bCritical));
+	if(m_HPModifyList.size() > g_pClientConfig->HPModifyListMax)m_HPModifyList.pop_front();
 }
 
 void 

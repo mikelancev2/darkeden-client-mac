@@ -21,10 +21,14 @@
 #define __MINTERNET_CONNECTION_H__
 
 #ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <Windows.h>
+#endif
 #include <WinINet.h>
 #else
-#include "../basic/Platform.h"
+#include <Platform.h>
 // macOS: Define stub types for Windows Internet API
 typedef void* HINTERNET;
 #endif

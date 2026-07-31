@@ -11619,6 +11619,76 @@ MTopView::UpdateImageObject(const POINT &newFirstSector)
 	//#endif	
 }
 
+// fix: two places in this file (MTopView::DrawZone's "Adam Cloud" background
+// blit, and MTopView::ExcuteOustersFinEvent's generic event-background blit)
+// used to do `reinterpret_cast<CSpriteSurface*>(pSomeCDirectDrawSurface)`,
+// then call a CSpriteSurface::BltNoColorkey on the result. In the SDL2
+// backend (SPRITESURFACE_STANDALONE), CSpriteSurface is a completely
+// independent class - NOT derived from CDirectDrawSurface (see
+// SpriteLib/CSpriteSurface.h) - so that cast reinterpreted a
+// CDirectDrawSurface's real memory layout as if it were a CSpriteSurface's,
+// making BltNoColorkey read garbage pointers/dimensions from the wrong
+// offsets. This crashed (access violation inside a system DLL, reached via
+// whatever bogus "pixel buffer pointer" it read) any time an event
+// background (Adam's Cloud weather, or any of the other
+// EVENTBACKGROUNDID_* images via EVENTFLAG_ONLY_EVENT_BACKGROUND) was
+// active - which, since ExcuteOustersFinEvent runs unconditionally every
+// frame as part of DrawZone's background draw, could crash on the very
+// first frame after entering the game. Fixed by blitting directly from the
+// source's own raw pixel buffer (CDirectDrawSurface already has real
+// Lock/GetSurfacePointer/GetSurfacePitch backing these images, loaded in
+// MEventManager::AssertEventBackground) onto the destination CSpriteSurface's
+// own raw buffer - an unclipped, no-colorkey row copy, matching what
+// BltNoColorkey does.
+static void BltEventBackgroundNoColorkey(CSpriteSurface* pDest, POINT* pDestPoint, CDirectDrawSurface* pSrc, RECT* pSrcRect)
+{
+	// Clamp against the source's real allocated size - pSrcRect was sized
+	// from g_GameRect (screen dimensions) by the caller, which can be larger
+	// than the actual loaded event-background image, so copying the
+	// unclamped rect read past the end of the source pixel buffer.
+	int srcLeft = max(0, (int)pSrcRect->left);
+	int srcTop = max(0, (int)pSrcRect->top);
+	int srcRight = min((int)pSrcRect->right, pSrc->GetWidth());
+	int srcBottom = min((int)pSrcRect->bottom, pSrc->GetHeight());
+
+	int width = srcRight - srcLeft;
+	int height = srcBottom - srcTop;
+	if (width <= 0 || height <= 0)
+		return;
+
+	if (!pSrc->Lock())
+		return;
+
+	WORD* pSrcBase = (WORD*)pSrc->GetSurfacePointer();
+	long srcPitch = pSrc->GetSurfacePitch();
+	if (pSrcBase == NULL)
+	{
+		pSrc->Unlock();
+		return;
+	}
+
+	RECT destRect = { pDestPoint->x, pDestPoint->y, pDestPoint->x + width, pDestPoint->y + height };
+	DWORD destPitch = 0;
+	WORD* pDestBase = (WORD*)pDest->Lock(&destRect, &destPitch);
+	if (pDestBase == NULL)
+	{
+		pSrc->Unlock();
+		return;
+	}
+
+	BYTE* pSrcRow = (BYTE*)pSrcBase + srcTop * srcPitch + srcLeft * sizeof(WORD);
+	BYTE* pDestRow = (BYTE*)pDestBase;
+	for (int y = 0; y < height; y++)
+	{
+		memcpy(pDestRow, pSrcRow, width * sizeof(WORD));
+		pSrcRow += srcPitch;
+		pDestRow += destPitch;
+	}
+
+	pDest->Unlock();
+	pSrc->Unlock();
+}
+
 //----------------------------------------------------------------------
 // Draw Zone
 //----------------------------------------------------------------------
@@ -12636,6 +12706,21 @@ MTopView::DrawZone(int firstPointX,int firstPointY)
 	point.x = 0;
 	point.y = 0;
 
+	// fix: rectReuse is built from the current screen position minus the
+	// cached tile surface's origin, then incrementally adjusted throughout
+	// the partial-tile-surface-reuse logic above (the various
+	// rectReuse.{left,top,right,bottom} +=/-= TILESURFACE_OUTLINE_* lines).
+	// For some movement/zone combinations (confirmed via diagnostic logging:
+	// rectReuse.top came out as -72 entering Limbo_Lair_NW) that math can
+	// land outside the tile surface's actual bounds. The blit below then
+	// read from a negative/out-of-range offset into m_pTileSurface's pixel
+	// buffer - an out-of-bounds read access violation. Clamp to the tile
+	// surface's real bounds and shift point.x/y to match whatever we clip
+	// off the left/top, so alignment is preserved for the in-bounds portion.
+	if (rectReuse.left < 0) { point.x += -rectReuse.left; rectReuse.left = 0; }
+	if (rectReuse.top < 0) { point.y += -rectReuse.top; rectReuse.top = 0; }
+	if (rectReuse.right > g_TILESURFACE_WIDTH) rectReuse.right = g_TILESURFACE_WIDTH;
+	if (rectReuse.bottom > g_TILESURFACE_HEIGHT) rectReuse.bottom = g_TILESURFACE_HEIGHT;
 
 	////m_pSurface->BltDarkness(&point, m_pTileSurface, &rectReuse, DARK_VALUE);
 
@@ -12659,16 +12744,14 @@ MTopView::DrawZone(int firstPointX,int firstPointY)
 			int CloudPos = g_CurrentFrame % g_GameRect.right;
 			POINT CloudPoint = {0,0};
 			RECT CloudRect = { CloudPos, 0, g_GameRect.left, g_GameRect.top };
-// SDL2: Cast CDirectDrawSurface* to CSpriteSurface* for compatibility (unified path)
-			CSpriteSurface* pCloudSprite = reinterpret_cast<CSpriteSurface*>(pCloudSurface);
 			if(CloudPos != g_GameRect.left)
-				m_pSurface->BltNoColorkey(&CloudPoint, pCloudSprite, &CloudRect);
+				BltEventBackgroundNoColorkey(m_pSurface, &CloudPoint, pCloudSurface, &CloudRect);
 			if(CloudPos != 0)
 			{
 				CloudPoint.x	= g_GameRect.left-CloudPos;
 				CloudRect.left	=  0;
 				CloudRect.right	=  CloudPos;
-				m_pSurface->BltNoColorkey(&CloudPoint, pCloudSprite, &CloudRect);
+				BltEventBackgroundNoColorkey(m_pSurface, &CloudPoint, pCloudSurface, &CloudRect);
 			}
 			if(bDrawBackGround)
 				m_pSurface->Blt(&point, m_pTileSurface, &rectReuse);
@@ -13219,7 +13302,7 @@ if (!m_pSurface->Lock()) return;
 				|| g_pPlayer->ShowInDarkness(pCreature->GetX(), pCreature->GetY()))
 			{
 				// Ãâ·Â ½ÃÁ¡ÀÌ sY1º¸´Ù ÀûÀº °æ¿ì..´Â Ãâ·Â
-				// ±×¸²ÀÇ ÁÂÇ¥¸¦ ÇöÀç È­¸éÀÇ ÁÂÇ¥¿¡ ¸ÂÃß±â								
+				// ±×¸²ÀÇ ÁÂÇ¥¸¦ ÇöÀç È­¸éÀÇ ÁÂÇ¥¿¡ ¸ÂÃß±â
 				point.x = pCreature->GetPixelX() - m_FirstZonePixel.x;
 				point.y = pCreature->GetPixelY() - m_FirstZonePixel.y;
 
@@ -14273,10 +14356,23 @@ if (!m_pSurface->Lock()) return;
 //			if(g_pPlayer->HasEffectStatus(EFFECTSTATUS_BLINDNESS))
 //				playerLight = 1;
 
-		//	DEBUG_ADD_FORMAT("######## Sight  (%d)", playerLight); 
-			if (true)
-			{ 
-				AddLightFilter3D( pX, 
+		//	DEBUG_ADD_FORMAT("######## Sight  (%d)", playerLight);
+			// fix: this was hardcoded to `if (true)` (originally `if
+			// (CDirect3D::IsHAL())` in the old client), forcing every frame
+			// down the 3D lighting path - including DrawLightBuffer3D(),
+			// which uses m_pLightBufferTexture. But InitFilters() below was
+			// ported as an SDL2 "unified 2D path" that only ever sets up
+			// the 2D lighting buffers (m_p2DLightPixelWidth/Height,
+			// m_LightBufferFilter) and never allocates
+			// m_pLightBufferTexture - so DrawLightBuffer3D() always crashed
+			// on a null pointer as soon as darkness/light-buffer rendering
+			// was triggered (m_DarkBits || IsInDarkness()). The 2D path
+			// (AddLightFilter2D/DrawLightBuffer2D) is fully ported and uses
+			// exactly what InitFilters() actually initializes, so route
+			// here instead to match.
+			if (false)
+			{
+				AddLightFilter3D( pX,
 					pY - (g_pPlayer->IsFlyingCreature()? 72:0 ),	//g_pPlayer->GetZ(), 
 					playerLight, 
 					false,	// screenPixelÁÂÇ¥			
@@ -18424,50 +18520,64 @@ MTopView::GetRandomMonsterTypeInZone() const
 
 void		
 MTopView::DrawCreatureHPModify(POINT *point, MCreature* pCreature)
-{	
+{
 //	return;
 
-	if(!g_pPlayer->HasEffectStatus( EFFECTSTATUS_VIEW_HP ) || pCreature->IsEmptyHPModifyList())
+	// Floating damage number over the creature. EFFECTSTATUS_VIEW_HP is
+	// never granted to the player anywhere in this codebase (every place
+	// that would do so is commented out), so gating on it always blocked
+	// this - removed to show whenever there's a hit/heal in the list.
+	if(pCreature->IsEmptyHPModifyList())
 		return;
 
 	MCreature::HPMODIFYLIST *pList = (MCreature::HPMODIFYLIST *)pCreature->GetHPModifyList();
 
+	// Only the most recent entry is kept (AddHPModify clears the list on
+	// each new hit), so just show it: rise for LIFETIME_MS then vanish -
+	// no stacking loop needed.
 	MCreature::HPMODIFYLIST::iterator itr = pList->begin();
+	if ( itr == pList->end() )
+		return;
 
-	int py = point->y - (pList->size()-1)*15;
+	const int modifyValue = itr->modify;
 
-	g_FL2_GetDC();
-
-	while(itr != pList->end())
+	// Only show DAMAGE (negative numbers) - passive heal/regen ticks aren't
+	// interesting here and are dropped from the list too.
+	if ( modifyValue >= 0 )
 	{
-		char str[128];
-		COLORREF color;
-
-		const int modifyValue = itr->modify;
-		if(itr->modify < 0 )
-		{
-			sprintf(str, "%d", modifyValue);
-			color = RGB(255, 150, 150);
-		}
-		else
-		{
-			sprintf(str, "+%d", modifyValue);
-			RGB(150, 255, 150);
-		}
-
-		g_PrintColorStrOut(point->x + 24 - g_GetStringWidth(str, gpC_base->m_chatting_pi.hfont)/2, py, str, gpC_base->m_chatting_pi, color, RGB_BLACK);
-
-		py += 15;
-
-		if(GetTickCount() - itr->TickCount > g_pClientConfig->HPModifyListTime)
-		{
-			pList->pop_front();
-			itr = pList->begin();
-		}
-		else
-			itr++;
+		pList->clear();
+		return;
 	}
 
+	const DWORD elapsed = GetTickCount() - itr->TickCount;
+	const DWORD LIFETIME_MS = 700;
+	const int   RISE_PIXELS = 34;
+
+	if ( elapsed > LIFETIME_MS )
+	{
+		pList->clear();
+		return;
+	}
+
+	int riseOffset = (int)( (long long)RISE_PIXELS * elapsed / LIFETIME_MS );
+	int py = point->y - 24 - riseOffset;
+
+	char str[128];
+	sprintf(str, "%d", modifyValue);
+
+	// Color: bright red when the LOCAL player takes the damage; yellow when
+	// the damage dealt was a critical hit (itr->bCritical, straight from the
+	// server via GCStatusCurrentHP); white for a normal hit dealt.
+	COLORREF color;
+	if ( pCreature == g_pPlayer )
+		color = RGB(255, 20, 20);
+	else if ( itr->bCritical )
+		color = RGB(255, 230, 0);
+	else
+		color = RGB(255, 255, 255);
+
+	g_FL2_GetDC();
+	g_PrintColorStrOut(point->x + 24 - g_GetStringWidth(str, gpC_base->m_damage_number_pi.hfont)/2, py, str, gpC_base->m_damage_number_pi, color, RGB_BLACK);
 	g_FL2_ReleaseDC();
 }
 // 2004, 08, 18, sobeit add start 
@@ -18848,8 +18958,18 @@ MTopView::DrawCreatureName(MCreature* pCreature)
 			int alignment = pCreature->GetAlignment();
 
 			color = m_ColorNameAlignment[alignment];
-			font	= FONTID_VAMPIRE_NAME;					
-		}			
+			font	= FONTID_VAMPIRE_NAME;
+		}
+	}
+
+	// fix: monster nameplates use the same red "hostile/attackable" color
+	// as enemy players (m_ColorNameAlignment[1]/COLOR_NAME_EVIL), which is
+	// hard to read against their also-red HP bar. Force plain monster
+	// names (not NPCs, not players/pets) to white - hostile PLAYER names
+	// stay red since that's still a useful at-a-glance PvP signal.
+	if (pCreature->GetClassType() == MCreature::CLASS_CREATURE)
+	{
+		color = RGB_WHITE;
 	}
 
 	if (pName!=NULL)
@@ -19187,7 +19307,7 @@ MTopView::DrawCreatureName(MCreature* pCreature)
 				switch(bType)
 				{
 				case NicknameInfo::NICK_BUILT_IN:
-					color = RGB_YELLOW;
+					color = RGB_WHITE;
 					bgColor = CSDLGraphics::Color(255,0,0);
 
 					break;
@@ -19614,7 +19734,7 @@ MTopView::DrawCreatureMyName()
 				switch(bType)
 				{
 				case NicknameInfo::NICK_BUILT_IN:
-					color = RGB_YELLOW;
+					color = RGB_WHITE;
 					bgColor = CSDLGraphics::Color(255,0,0);
 
 					break;
@@ -19870,9 +19990,7 @@ MTopView::ExcuteOustersFinEvent()
 
 			CDirectDrawSurface *pSurface = g_pEventManager->GetEventBackground((EVENTBACKGROUND_ID)event->parameter4);
 
-// SDL2: Cast CDirectDrawSurface* to CSpriteSurface* for compatibility (unified path)
-		CSpriteSurface* pSpriteSurface = reinterpret_cast<CSpriteSurface*>(pSurface);
-		m_pSurface->BltNoColorkey(&p, pSpriteSurface, &r);
+			BltEventBackgroundNoColorkey(m_pSurface, &p, pSurface, &r);
 
 //			m_pSurface->BltSprite(&p, g_pEventManager->GetEventBackground(event->parameter4));
 

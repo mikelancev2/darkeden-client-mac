@@ -101,9 +101,10 @@ class MCreature : public MObject, public MStatus {
 		//----------------------------------------------------------------------
 		class HPModify {
 			public :
-				HPModify(int value_modify, DWORD value_TickCount) { modify = value_modify; TickCount = value_TickCount; }
+				HPModify(int value_modify, DWORD value_TickCount, bool value_bCritical = false) { modify = value_modify; TickCount = value_TickCount; bCritical = value_bCritical; }
 				int		modify;
 				DWORD	TickCount;
+				bool	bCritical;
 		};
 
 		typedef	std::list<HPModify>	HPMODIFYLIST;
@@ -238,7 +239,7 @@ class MCreature : public MObject, public MStatus {
 		//----------------------------------------------------------
 		// 상태 값 바꾸기
 		//----------------------------------------------------------
-		virtual void	SetStatus(DWORD n, DWORD value);
+		virtual void	SetStatus(DWORD n, DWORD value, bool bCritical = false);
 
 		//----------------------------------------------------------
 		// 변신
@@ -741,7 +742,7 @@ class MCreature : public MObject, public MStatus {
 		// HP Modify관련
 		//--------------------------------------------------		
 		const HPMODIFYLIST *GetHPModifyList() const			{ return &m_HPModifyList; }
-		void				AddHPModify(const int modify);
+		void				AddHPModify(const int modify, bool bCritical = false);
 		const bool			IsEmptyHPModifyList() const		{ return m_HPModifyList.empty(); }
 		const int			GetHPModifyListSize() const		{ return m_HPModifyList.size(); }
 

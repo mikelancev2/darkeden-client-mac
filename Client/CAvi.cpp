@@ -8,7 +8,11 @@ CAVI::CAVI()
 
 #ifdef PLATFORM_WINDOWS
 
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <Windows.h>
+#endif
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
 

@@ -620,11 +620,11 @@ MTopView::DrawCreatureShadow(POINT* pPoint, MCreature* pCreature)
 			bool bWerWolf = pCreature->GetCreatureType() == CREATURETYPE_WER_WOLF;
 
 			if( pCreature->IsAdvancementClass() && !bBat && !bWolf && !bWerWolf )
-				DrawShadowAdvancementClassVampireCharacter( pPoint, pCreature, action, direction, frame, body, bBlendingShadow, bSlayerPet_ShowTurret );		
+				DrawShadowAdvancementClassVampireCharacter( pPoint, pCreature, action, direction, frame, body, bBlendingShadow, bSlayerPet_ShowTurret );
 			else
-				DrawShadowVampireCharacter( pPoint, pCreature, action, direction, frame, body, bBlendingShadow, bSlayerPet_ShowTurret );		
-			
-		}	
+				DrawShadowVampireCharacter( pPoint, pCreature, action, direction, frame, body, bBlendingShadow, bSlayerPet_ShowTurret );
+
+		}
 		
 		//----------------------------------------
 		//
@@ -757,25 +757,25 @@ void	MTopView::DrawShadowSlayerCharacter( POINT *pPoint, MCreature* pCreature, i
 void	MTopView::DrawShadowVampireCharacter( POINT *pPoint, MCreature* pCreature, int action, int direction, int frame, int body, bool bBlendingShadow , bool bSlayerPet_ShowTurret )
 {
 	FRAME_ARRAY &FA = m_CreatureShadowFPK[body][action][direction];
-	
+
 	if (FA.GetSize() > frame)
 	{
 		CFrame &Frame = FA[frame];
-		
+
 		int sprite = Frame.GetSpriteID(),
 			cx		= Frame.GetCX(),
 			cy		= Frame.GetCY();
-		
+
 		// 좌표 보정
 		pointTemp.x = pPoint->x + cx;// + pCreature->GetSX();
 		pointTemp.y = pPoint->y + cy;// + pCreature->GetSY();
 		CShadowSprite* pSprite = &m_CreatureSSPK[sprite];
-		
+
 		//				if (pSprite->IsNotInit())
 		//				{
 		//					LoadFromFileCreatureActionSPK( body, action );
 		//				}
-		
+
 		if (bBlendingShadow)
 		{
 			m_pSurface->BltShadowSpriteDarkness( &pointTemp, pSprite, 1 );
@@ -784,7 +784,8 @@ void	MTopView::DrawShadowVampireCharacter( POINT *pPoint, MCreature* pCreature, 
 		{
 			m_pSurface->BltShadowSprite( &pointTemp, pSprite );
 		}
-	}		
+
+	}
 	
 	// 슬레 펫인 경우는 터렛 찍어줘야 된다-ㅅ-;;;; 하드하드..아아-_-/~
 	if( bSlayerPet_ShowTurret )
@@ -842,6 +843,10 @@ void	MTopView::DrawShadowVampireCharacter( POINT *pPoint, MCreature* pCreature, 
 
 void	MTopView::DrawShadowOustersCharacter( POINT *pPoint, MCreature* pCreature, int action, int direction, int frame )
 {
+	// fix: same unloaded-pack crash as DrawShadowSlayerCharacter (see there)
+	if (m_OustersShadowFPK.GetSize() == 0)
+		return;
+
 	//  챠크람이 있다
 	MCreatureWear *pCreatureWear = (MCreatureWear *)pCreature;
 	
@@ -989,6 +994,10 @@ void	MTopView::DrawShadowAdvancementClassSlayerCharacter( POINT *pPoint, MCreatu
 		CCreatureFramePack& slayerFPK = pCreature->IsMale() ? m_AdvancementSlayerManShadowFPK : m_AdvancementSlayerWomanShadowFPK;
 		CShadowSpritePack& addonSSPK = pCreature->IsMale() ? m_AdvancementSlayerManSSPK : m_AdvancementSlayerWomanSSPK;
 
+		// fix: same unloaded-pack crash as DrawShadowSlayerCharacter (see there)
+		if (slayerFPK.GetSize() == 0)
+			return;
+
 		for (int i=0; i<AC_ADDON_MAX; i++)
 		{
 			// Creature의 현재 방향에 따라서...
@@ -1044,6 +1053,10 @@ void	MTopView::DrawShadowAdvancementClassVampireCharacter( POINT *pPoint, MCreat
 {		
 	CCreatureFramePack& advanceVampireFPK = pCreature->IsMale() ? m_AdvancementVampireManShadowFPK : m_AdvancementVampireWomanShadowFPK;
 	CShadowSpritePack& advanceVampireSSPK = pCreature->IsMale() ? m_AdvancementVampireManSSPK : m_AdvancementVampireWomanSSPK;
+
+	// fix: same unloaded-pack crash as DrawShadowSlayerCharacter (see there)
+	if (advanceVampireFPK.GetSize() == 0)
+		return;
 
 	action = GetAdvancementVampireActionFromVampireAction( action, pCreature );
 
@@ -1178,6 +1191,10 @@ void	MTopView::DrawShadowAdvancementClassVampireCharacter( POINT *pPoint, MCreat
 
 void	MTopView::DrawShadowAdvancementClassOustersCharacter( POINT *pPoint, MCreature* pCreature, int action, int direction, int frame )
 {
+	// fix: same unloaded-pack crash as DrawShadowSlayerCharacter (see there)
+	if (m_AdvancementOustersShadowFPK.GetSize() == 0)
+		return;
+
 		//  챠크람이 있다
 	MCreatureWear *pCreatureWear = (MCreatureWear *)pCreature;
 	

@@ -5,7 +5,7 @@
 #include <wtypes.h>
 #include <dsound.h>
 #else
-#include "../basic/Platform.h"  // For basic types
+#include <Platform.h>  // For basic types
 #include "CDirectSoundStream.h"  // For DSBPOSITIONNOTIFY definition
 #endif
 #include "mp3.h"

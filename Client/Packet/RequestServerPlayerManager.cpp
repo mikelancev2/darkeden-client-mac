@@ -10,13 +10,21 @@
 #include "ServerInfo.h"
 
 // Platform-specific threading includes
-#ifdef PLATFORM_WINDOWS
-	#include <windows.h>
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <windows.h>
+#endif
 	#include <process.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__EMSCRIPTEN__)
 	#include <pthread.h>
 	#include <unistd.h>
-	#include <SDL2/SDL.h>  // For SDL_Delay on non-Windows platforms
+#if __has_include(<SDL2/SDL.h>)
+#include <SDL2/SDL.h>
+#else
+#include <SDL.h>
+#endif
 
 	// Additional Windows type definitions
 	typedef DWORD* LPDWORD;
@@ -59,6 +67,7 @@
 		}
 		return (HANDLE)0;
 }
+#endif
 
 // Note: CreateThread stub removed - use platform_thread_create from Platform.h
 // #ifdef PLATFORM_WINDOWS... (removed)
@@ -510,5 +519,3 @@ WaitRequestThreadProc(LPVOID lpParameter)
 
 	return 0L;
 }
-
-#endif /* PLATFORM_WINDOWS */

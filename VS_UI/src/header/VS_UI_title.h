@@ -294,6 +294,8 @@ private:
 	LineEditorVisual			m_lev_password;
 	std::string					m_lev_id_backup;
 
+	DWORD						m_fadeStartMs;  // login panel fade-in on Start(), see Show() (0 = not fading)
+
 	//INPUT_POSITION	m_e_ip; // input position
 
 	void	SendLoginToClient();
@@ -1330,6 +1332,8 @@ private:
 //	C_SPRITE_PACK				m_pC_symbol_ani;
 	C_SPRITE_PACK *				m_pC_use_grade;
 
+	DWORD						m_bgFadeStartMs; // m_title_spk fade-in, see Show() (0 = unarmed)
+
 #ifndef _LIB
 	C_VS_UI_DIALOG *			m_pC_dialog;
 #endif
@@ -1378,6 +1382,7 @@ public:
 	~C_VS_UI_TITLE();
 
 	void	RunConnect()			{ if(m_pC_login) m_pC_login->Start(); }
+	bool	TryRunSideMenuAction(UINT message, int screen_x, int screen_y);
 
 	void	RunCannotPlayMessage();
 	void	RunCannotPlayByAttrMessage();

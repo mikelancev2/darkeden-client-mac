@@ -15,9 +15,13 @@
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 
 #ifdef PLATFORM_WINDOWS
-#include <Windows.h>
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-#include "../../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+#include <Platform.h>
 #endif
 
 // TODO: reference additional headers your program requires here

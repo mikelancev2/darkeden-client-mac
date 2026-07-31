@@ -7,9 +7,11 @@
 #ifndef __SYSTEM_TYPES_H__
 #define __SYSTEM_TYPES_H__
 
+#include "../../../basic/Platform.h"
+
 /* Platform detection */
 #if defined(_WIN32) || defined(_WIN64)
-	#ifndef PLATFORM_WINDOWS
+	#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_USE_SDL)
 		#define PLATFORM_WINDOWS
 	#endif
 #elif defined(__APPLE__)
@@ -18,8 +20,12 @@
 	#define PLATFORM_LINUX
 #endif
 
-#ifdef PLATFORM_WINDOWS
-	#include <Windows.h>
+#if defined(PLATFORM_WINDOWS) && !defined(PLATFORM_USE_SDL)
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <Windows.h>
+#endif
 #elif defined(__LINUX__) || defined(PLATFORM_MACOS)
 	#include <sys/types.h>
 #endif

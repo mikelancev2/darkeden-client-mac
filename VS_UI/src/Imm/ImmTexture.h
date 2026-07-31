@@ -46,7 +46,11 @@
 #endif
 #endif
 
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <windows.h>
+#endif
 #include "ImmBaseTypes.h"
 #include "ImmEffect.h"
 

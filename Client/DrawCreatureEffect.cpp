@@ -200,6 +200,13 @@ void	MTopView::DrawFadeOutForACSlayer( POINT *pPoint, MCreature* pCreature, int 
 	CCreatureFramePack& slayerFPK = pCreature->IsMale() ? m_AdvancementSlayerManFPK : m_AdvancementSlayerWomanFPK;
 	CIndexSpritePack& addonISPK = pCreature->IsMale() ? m_AdvancementSlayerManSPK : m_AdvancementSlayerWomanSPK;
 
+	// fix: same unloaded-pack crash as DrawShadowSlayerCharacter (see
+	// DrawCreatureShadow.cpp) - slayerFPK can still be m_Size==0 the first
+	// time a creature is fully drawn this session (e.g. right after leaving
+	// EFFECTSTATUS_GHOST).
+	if (slayerFPK.GetSize() == 0)
+		return;
+
 
 
 	//-----------------------------------------------------------
@@ -534,6 +541,13 @@ void	MTopView::DrawFastMoveForACSlayer(POINT* pPoint, MCreature* pCreature, int 
 	
 	CCreatureFramePack& slayerFPK = pCreature->IsMale() ? m_AdvancementSlayerManFPK : m_AdvancementSlayerWomanFPK;
 	CIndexSpritePack& addonISPK = pCreature->IsMale() ? m_AdvancementSlayerManSPK : m_AdvancementSlayerWomanSPK;
+
+	// fix: same unloaded-pack crash as DrawShadowSlayerCharacter (see
+	// DrawCreatureShadow.cpp) - slayerFPK can still be m_Size==0 the first
+	// time a creature is fully drawn this session (e.g. right after leaving
+	// EFFECTSTATUS_GHOST).
+	if (slayerFPK.GetSize() == 0)
+		return;
 	
 	
 	//-----------------------------------------------------------
@@ -922,7 +936,14 @@ void	MTopView::DrawInvisibleForACSlayer(POINT* pPoint, MCreature* pCreature, int
 	//by viva
 	CIndexSpritePack& addonISPK = pCreature->IsMale() ? m_AdvancementSlayerManSPK : m_AdvancementSlayerWomanSPK;
 	CCreatureFramePack& slayerFPK = pCreature->IsMale() ? m_AdvancementSlayerManFPK : m_AdvancementSlayerWomanFPK;
-	
+
+	// fix: same unloaded-pack crash as DrawShadowSlayerCharacter (see
+	// DrawCreatureShadow.cpp) - slayerFPK can still be m_Size==0 the first
+	// time a creature is fully drawn this session (e.g. right after leaving
+	// EFFECTSTATUS_GHOST).
+	if (slayerFPK.GetSize() == 0)
+		return;
+
 	
 	//-----------------------------------------------------------
 	// 좌우 잔상
@@ -1341,6 +1362,13 @@ void	MTopView::DrawWeaponFadeOutForACSlayer(POINT* pPoint, MCreature* pCreature,
 	
 	CCreatureFramePack& slayerFPK = pCreature->IsMale() ? m_AdvancementSlayerManFPK : m_AdvancementSlayerWomanFPK;
 	CIndexSpritePack& addonISPK = pCreature->IsMale() ? m_AdvancementSlayerManSPK : m_AdvancementSlayerWomanSPK;
+
+	// fix: same unloaded-pack crash as DrawShadowSlayerCharacter (see
+	// DrawCreatureShadow.cpp) - slayerFPK can still be m_Size==0 the first
+	// time a creature is fully drawn this session (e.g. right after leaving
+	// EFFECTSTATUS_GHOST).
+	if (slayerFPK.GetSize() == 0)
+		return;
 	
 	
 	//-----------------------------------------------------------

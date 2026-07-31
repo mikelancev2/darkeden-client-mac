@@ -21,10 +21,12 @@
 
 #pragma warning(disable:4786)
 
-#ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#elif defined(PLATFORM_WINDOWS)
 #include <windows.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #include <unistd.h>
 #endif
 #include <map>

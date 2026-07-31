@@ -664,7 +664,15 @@ void C_SPRITE_PACK::Open(const char *sz_filename)
 	// On Windows: no conversion (keeps backslashes)
 	// On Unix/macOS: converts backslashes to forward slashes
 	std::string convertedPath = ConvertGamePath(sz_filename);
-	m_SPK.LoadFromFileRunning( convertedPath.c_str() );
+	bool bLoadOk = m_SPK.LoadFromFileRunning( convertedPath.c_str() );
+
+	FILE* f = fopen("Log/ui_debug.log", "a");
+	if (f)
+	{
+		fprintf(f, "C_SPRITE_PACK::Open path='%s' LoadFromFileRunning=%d w0=%d h0=%d\n",
+			convertedPath.c_str(), bLoadOk, m_SPK[0].GetWidth(), m_SPK[0].GetHeight());
+		fclose(f);
+	}
 }
 
 /*-----------------------------------------------------------------------------

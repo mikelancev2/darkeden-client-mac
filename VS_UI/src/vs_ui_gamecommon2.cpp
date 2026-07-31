@@ -13901,7 +13901,10 @@ C_VS_UI_QUEST_MANAGER::C_VS_UI_QUEST_MANAGER()
 //	GetMissionTitle(1, 1,3);
 //	SetQuestManagerInfo("1", false);
 //	RunAllWinow();
-	if(LoadQuestXML() == false) 
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_QUEST_MANAGER ctor: before LoadQuestXML\n"); fclose(f); } }
+	bool bQuestXmlOk = LoadQuestXML();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_QUEST_MANAGER ctor: LoadQuestXML()=%d\n", (int)bQuestXmlOk); fclose(f); } }
+	if(bQuestXmlOk == false)
 		return;
 #ifndef _LIB
 	
@@ -13995,10 +13998,12 @@ C_VS_UI_QUEST_MANAGER::C_VS_UI_QUEST_MANAGER()
 	UpdateQuestItemInfo(TempItemList);
 	PushGQuestExcuteElement(1010,1,2);
 	PushGQuestExcuteElement(1010,1,3);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_QUEST_MANAGER ctor: before RunQuestIcon\n"); fclose(f); } }
 
 	RunQuestIcon();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_QUEST_MANAGER ctor: end reached OK\n"); fclose(f); } }
 
-#endif 
+#endif
 }
 
 C_VS_UI_QUEST_MANAGER::~C_VS_UI_QUEST_MANAGER()
@@ -14021,21 +14026,33 @@ C_VS_UI_QUEST_MANAGER::~C_VS_UI_QUEST_MANAGER()
 bool	C_VS_UI_QUEST_MANAGER::LoadQuestXML()
 {
 	m_Quest_XML_file.SetRAR(RPK_TUTORIAL_ETC, RPK_PASSWORD);
-	
-	m_Quest_XML_file.Open(QUEST_XML_FILE);
 
 	XMLParser	parser;
 
-	// quest xml�� vector�� ����� �ؼ���..-_-;
-	parser.parse( (char *)m_Quest_XML_file.GetFilePointer(), &m_Quest_XML_Tree, true);
+	// CRarFile::Open() extracts from a directory next to the .rpk (see
+	// RarFile.h) rather than reading the .rpk archive directly - if that
+	// extracted directory/file isn't present, Open() fails and
+	// GetFilePointer() returns NULL. This used to be handed straight to
+	// parser.parse() unconditionally below, which dereferences it and
+	// crashes (0xC0000005) instead of just leaving the quest list empty.
+	bool bXmlOpenOk = m_Quest_XML_file.Open(QUEST_XML_FILE) && m_Quest_XML_file.GetFilePointer() != NULL;
+
+	if (bXmlOpenOk)
+	{
+		// quest xml to vector
+		parser.parse( (char *)m_Quest_XML_file.GetFilePointer(), &m_Quest_XML_Tree, true);
+	}
 
 	m_Quest_XML_file.Release();
-	
 
-	m_Quest_XML_file.Open(QUEST_EVENT_XML_FILE);
 
-	parser.parse( (char *)m_Quest_XML_file.GetFilePointer(), &m_Quest_XML_Tree, true);
-	
+	bool bEventXmlOpenOk = m_Quest_XML_file.Open(QUEST_EVENT_XML_FILE) && m_Quest_XML_file.GetFilePointer() != NULL;
+
+	if (bEventXmlOpenOk)
+	{
+		parser.parse( (char *)m_Quest_XML_file.GetFilePointer(), &m_Quest_XML_Tree, true);
+	}
+
 	m_Quest_XML_file.Release();
 
 	return TRUE;

@@ -607,6 +607,20 @@ ClientConfig::LoadFromFile(const char* filename)
 	READ_CHECK_EOF( COLOR_NAME_EVIL_MORE, temp, 4 )	
 
 	READ_CHECK_EOF( BLOOD_DROP_HP_PERCENT, temp, 4 )
+	// fix: a corrupted/malformed ClientConfig.inf (bad string-length prefixes
+	// in the URL_HOMEPAGE* fields read just above this point) can misalign
+	// every DWORD read after it, so this field ends up reading garbage bytes
+	// from deep inside the corrupted string data instead of a real 0-100
+	// percentage. Since BLOOD_DROP_HP_PERCENT gates "creature bleeds when HP
+	// is below this %" (MCreature::CheckDropBlood), a garbage value (observed:
+	// numbers in the hundreds of millions) makes percentHP<=BLOOD_DROP_HP_PERCENT
+	// always true, i.e. every creature - regardless of actual HP - drips
+	// blood constantly. Clamp to a sane range and fall back to the intended
+	// default (30) otherwise.
+	if (BLOOD_DROP_HP_PERCENT < 0 || BLOOD_DROP_HP_PERCENT > 100)
+	{
+		BLOOD_DROP_HP_PERCENT = 30;
+	}
 	READ_CHECK_EOF( BLOOD_DROP_GAP_TIME, temp, 4 )
 	READ_CHECK_EOF( BLOOD_DROP_RANDOM_TIME, temp, 4 )	
 	READ_CHECK_EOF( MAX_TEXTUREPART_EFFECTSHADOW, temp, 4 )

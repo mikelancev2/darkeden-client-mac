@@ -15,7 +15,7 @@
 #define	__CSDLGRAPHICS_H__
 
 /* Cross-platform includes */
-#include "../basic/Platform.h"
+#include <Platform.h>
 #include <cstring>
 #include <cstdint>
 
@@ -195,23 +195,46 @@ public:
 	static inline WORD		GetScreenWidth()		{ return 800; }
 	static inline WORD		GetScreenHeight()		{ return 600; }
 	static inline bool		IsMMX()	 				{ return false; }
-	static inline bool		IsSupportGammaControl()	{ return false; }
+	static inline bool		IsSupportGammaControl()	{ return true; }
 	static inline bool		Is565()	 				{ return true; }
 	static inline HWND		GetHwnd()				{ return nullptr; }
 	static inline LPDIRECTDRAW7 GetDD()			{ return nullptr; }
 
 	// Display methods (stub implementations - use SDL2 instead)
+	// NOTE: Flip() is a no-op. The real present happens in SDLMain.cpp's
+	// main loop; call the free function SDL_PresentGameBackBuffer() (below)
+	// instead when a frame must actually reach the screen before a blocking
+	// wait for input (see GameMain.cpp's UpdateDisconnected()).
 	static inline void		Flip() { }
 	static inline void		FlipToGDISurface() { }
 	static inline void		OnMove() { }
 	static inline bool		RestoreAllSurfaces() { return true; }
 	static inline void		ReleaseSurface() { }
 	static inline void		ReleaseAll() { }
-	static inline void		SetGammaRamp(WORD step = (WORD)-1) { }
-	static inline void		RestoreGammaRamp() { }
-	static inline void		SetAddGammaRamp(WORD rStep = 0, WORD gStep = 0, WORD bStep = 0) { }
+	// Real (software) gamma/brightness control - no hardware gamma ramp is
+	// available under SDL2 (m_pDDGammaControl is always NULL, never wired
+	// up to anything), so instead of driving a real DDGAMMARAMP this builds
+	// an 8-bit-per-channel lookup table with the same lerp-toward-black/
+	// lerp-toward-white math the original DirectDraw ramp used, and applies
+	// it to the backbuffer pixels once per frame right before present (see
+	// ApplyGammaToBuffer / spritectl_present_surface).
+	static void		SetGammaRamp(WORD step = (WORD)-1);
+	static void		RestoreGammaRamp();
+	static void		SetAddGammaRamp(WORD rStep = 0, WORD gStep = 0, WORD bStep = 0);
 	static inline void		SetDisplayMode(WORD width, WORD height, WORD bpp, DWORD flags1, DWORD flags2) { }
 	static inline void		RestoreDisplayMode() { }
+
+	// True once the current gamma/add-gamma settings are all neutral
+	// (GammaValue==100, no active screen-tint event) - lets the present
+	// path skip the per-pixel LUT pass entirely in the common case.
+	static inline bool		IsGammaNeutral()		{ return m_bGammaNeutral; }
+
+	// Applies the current gamma LUT in place to a buffer of RGB565 pixels.
+	// pitchBytes is the SDL surface's row pitch (may exceed width*2 due to
+	// row alignment padding), so rows are walked explicitly rather than
+	// treating the buffer as one flat array. No-op when IsGammaNeutral()
+	// (checked internally too, so callers don't need to guard the call).
+	static void		ApplyGammaToBuffer(uint16_t* pixels, int width, int height, int pitchBytes);
 
 	// InitMask - implemented in .cpp to initialize static arrays
 	static void		InitMask(bool b565);
@@ -235,6 +258,11 @@ private:
 	static DDGAMMARAMP						m_DDGammaRamp;
 	static WORD								m_GammaStep;
 	static WORD								m_AddGammaStep[3];
+
+	// Software gamma LUT state (see ApplyGammaToBuffer)
+	static uint8_t							m_GammaLUT[3][256];	// [0]=R [1]=G [2]=B
+	static bool								m_bGammaNeutral;
+	static void								RebuildGammaLUT();
 
 	// Window rectangles
 	static RECT								m_rcWindow;
@@ -277,5 +305,9 @@ public:
 
 	static bool		s_bUseIMEHandle;
 };
+
+// Defined in SDLMain.cpp - actually presents g_pBack to the screen.
+// See the note on CSDLGraphics::Flip() above.
+void SDL_PresentGameBackBuffer();
 
 #endif

@@ -2,7 +2,7 @@
 #define _SOUNDBUF_H_
 
 /* Platform-independent includes (SDL2 backend on all platforms) */
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #include "../../basic/AudioTypes.h"
 #include "mp3.h"
 //#include "dslib.h"

@@ -1,7 +1,7 @@
 #ifdef PLATFORM_WINDOWS
 #include <mmsystem.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #endif
 
 struct MP3;

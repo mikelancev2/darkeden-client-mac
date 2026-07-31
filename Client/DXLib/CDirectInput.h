@@ -9,7 +9,7 @@
 -----------------------------------------------------------------------------*/
 
 /* Include Platform.h first for type definitions (outside header guard) */
-#include "../basic/Platform.h"
+#include <Platform.h>
 
 #ifndef __CSDLINPUT_H__
 #define __CSDLINPUT_H__

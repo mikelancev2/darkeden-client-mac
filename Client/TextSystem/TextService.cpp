@@ -9,6 +9,7 @@
 
 #include "SpriteLib/CSpriteSurface.h"
 #include "RenderTargetSpriteSurface.h"
+#include <Platform.h>
 
 // Global surface pointer from Client
 extern CSpriteSurface* g_pLast;
@@ -54,6 +55,76 @@ static bool IsValidUtf8(const char* data, size_t len)
 	return true;
 }
 
+// Real Win32 kernel32 codepage conversion, loaded dynamically via SDL's
+// platform_lib_load/platform_lib_get_symbol (real LoadLibrary/GetProcAddress
+// on Windows, safe no-op on other platforms). Declared as raw function
+// pointers under local names rather than the standard API names - Platform.h
+// (included above for platform_lib_t) already ships a fake, ASCII-only
+// WideCharToMultiByte stub for non-Windows builds, and giving the real
+// pointers different names avoids colliding with that declaration.
+typedef int (__stdcall *MultiByteToWideCharFn)(unsigned int codePage, unsigned long flags,
+	const char* src, int srcLen, wchar_t* dst, int dstLen);
+typedef int (__stdcall *WideCharToMultiByteFn)(unsigned int codePage, unsigned long flags,
+	const wchar_t* src, int srcLen, char* dst, int dstLen,
+	const char* defaultChar, int* usedDefaultChar);
+
+static bool GetKernel32CodepageFns(MultiByteToWideCharFn* outMbToWc, WideCharToMultiByteFn* outWcToMb)
+{
+	static bool s_resolved = false;
+	static MultiByteToWideCharFn s_mbToWc = NULL;
+	static WideCharToMultiByteFn s_wcToMb = NULL;
+
+	if (!s_resolved) {
+		s_resolved = true;
+		platform_lib_t kernel32 = platform_lib_load("kernel32.dll");
+		if (kernel32 != NULL) {
+			s_mbToWc = (MultiByteToWideCharFn)platform_lib_get_symbol(kernel32, "MultiByteToWideChar");
+			s_wcToMb = (WideCharToMultiByteFn)platform_lib_get_symbol(kernel32, "WideCharToMultiByte");
+			// Intentionally not freed - kernel32 is always resident, and this
+			// stays cached for the process lifetime like the DDGAMMARAMP
+			// state above.
+		}
+	}
+
+	*outMbToWc = s_mbToWc;
+	*outWcToMb = s_wcToMb;
+	return s_mbToWc != NULL && s_wcToMb != NULL;
+}
+
+// Converts a raw byte string in the given Windows codepage to UTF-8 via the
+// real kernel32 conversion tables. Used for CP949 (Korean)/CP936 (GBK)/
+// CP950 (Big5) NPC/quest dialogue text, since SDL2's built-in SDL_iconv does
+// not carry conversion tables for these multi-byte CJK codepages - only
+// SDL_iconv_open("UTF-8", "CP949") (and friends) simply fail on this build,
+// silently falling through to raw un-converted bytes further down.
+static std::string ConvertWindowsCodepageToUtf8(const std::string& input, unsigned int codePage)
+{
+	MultiByteToWideCharFn mbToWc = NULL;
+	WideCharToMultiByteFn wcToMb = NULL;
+	if (input.empty() || !GetKernel32CodepageFns(&mbToWc, &wcToMb))
+		return std::string();
+
+	int wideLen = mbToWc(codePage, 0, input.data(), (int)input.size(), NULL, 0);
+	if (wideLen <= 0)
+		return std::string();
+
+	std::vector<wchar_t> wideBuf((size_t)wideLen);
+	if (mbToWc(codePage, 0, input.data(), (int)input.size(), &wideBuf[0], wideLen) <= 0)
+		return std::string();
+
+	const unsigned int CP_UTF8_LOCAL = 65001;
+	int utf8Len = wcToMb(CP_UTF8_LOCAL, 0, &wideBuf[0], wideLen, NULL, 0, NULL, NULL);
+	if (utf8Len <= 0)
+		return std::string();
+
+	std::string output;
+	output.resize((size_t)utf8Len);
+	if (wcToMb(CP_UTF8_LOCAL, 0, &wideBuf[0], wideLen, &output[0], utf8Len, NULL, NULL) <= 0)
+		return std::string();
+
+	return output;
+}
+
 static std::string ConvertEncoding(const std::string& input, const char* fromEncoding)
 {
 #ifdef USE_SDL_BACKEND
@@ -95,7 +166,21 @@ std::string TextService::NormalizeText(const std::string& text)
 	if (IsValidUtf8(text.c_str(), text.size()))
 		return text;
 
-	// Try common encodings: Korean first, then Chinese, then fallback
+	// Try the real kernel32 conversion tables first - SDL_iconv on this
+	// build has no conversion tables for these CJK codepages (SDL_iconv_open
+	// just fails), so ConvertEncoding below never actually succeeds for
+	// them; kernel32's MultiByteToWideChar/WideCharToMultiByte always does.
+	// 949 = CP949 (Korean, superset of EUC-KR), 936 = GBK, 950 = Big5.
+	const unsigned int windowsCodepages[] = {949, 936, 950};
+	for (size_t i = 0; i < sizeof(windowsCodepages) / sizeof(windowsCodepages[0]); ++i) {
+		std::string converted = ConvertWindowsCodepageToUtf8(text, windowsCodepages[i]);
+		if (!converted.empty())
+			return converted;
+	}
+
+	// Try common encodings via SDL_iconv: Korean first, then Chinese, then
+	// fallback (kept for platforms without a working kernel32.dll, e.g. a
+	// real Linux/Mac build with a full iconv behind SDL_iconv).
 	const char* encodings[] = {"CP949", "EUC-KR", "GBK", "GB2312", "BIG5", NULL};
 	for (int i = 0; encodings[i] != NULL; ++i) {
 		std::string converted = ConvertEncoding(text, encodings[i]);
@@ -327,8 +412,15 @@ std::vector<std::string> TextService::WrapText(const std::string& text, const Te
 
 		if (maxWidth > 0 && lineWidth + metrics.advance > maxWidth && !line.empty()) {
 			if (lastBreakIndex >= 0) {
+				// lastBreakIndex can point at (or, with lastBreakSkip, past)
+				// the end of `line` when the space that triggers this
+				// overflow check is itself the most recently recorded break
+				// point (i.e. the line's own trailing space overflowed it).
+				// substr() throws std::out_of_range if the start position is
+				// past the end, so clamp instead of indexing blindly.
+				size_t skipPos = static_cast<size_t>(lastBreakIndex) + static_cast<size_t>(lastBreakSkip);
 				lines.push_back(line.substr(0, lastBreakIndex));
-				line = line.substr(lastBreakIndex + lastBreakSkip);
+				line = (skipPos < line.size()) ? line.substr(skipPos) : std::string();
 				lineWidth = MeasureLineWidth(line, style.font);
 				lastBreakIndex = -1;
 				lastBreakSkip = 0;

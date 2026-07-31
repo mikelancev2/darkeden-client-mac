@@ -8,14 +8,17 @@
 // Include files
 //-----------------------------------------------------------------------------
 #include "Client_PCH.h"
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) && !defined(PLATFORM_USE_SDL)
 #include <MMSystem.h>
-#else
+#elif !defined(PLATFORM_WIN32_HOST)
 // macOS: BSD sockets headers for network functions
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#endif
+#if defined(PLATFORM_WINDOWS) || defined(_WIN32)
+#include <direct.h>
 #endif
 #include "DebugLog.h"
 #include "Client.h"
@@ -377,7 +380,8 @@ DrawTitleLoading()
 			}
 			else
 			{
-				pSurface->BltSpriteAlpha( &pointZero, g_pTitleLoadingSprite, g_TitleSpriteAlpha );
+				BYTE alpha = (BYTE)min(255, max(0, g_TitleSpriteAlpha * 255 / 31));
+				pSurface->BltSpriteAlpha( &pointZero, g_pTitleLoadingSprite, alpha );
 			}
 			pSurface->Unlock();
 		}
@@ -676,7 +680,7 @@ InitSurface()
 	}
 	g_pBack = new CSpriteSurface;
 	// SDL2: Unified surface initialization
-	g_pBack->Init(800, 600);
+	g_pBack->Init(g_GameRect.right, g_GameRect.bottom);
 
 	//--------------------------------------------------------
 	// 임시로 로딩화면 구성..
@@ -1477,16 +1481,16 @@ InitGame()
 	//---------------------------------------------------------------------
 	log_init();
 
-	// Always enable console output and INFO level logging
-	// This ensures DEBUG_ADD macros and panic messages are visible
-	log_set_console_output(true);
-
-// Conditional compilation: Remove DEBUG logs in Release builds
+// Conditional compilation: verbose logs only in Debug builds
 #ifdef _DEBUG
+	log_set_console_output(true);
 	log_set_level(LOG_LEVEL_DEBUG);
 #else
-	log_set_level(LOG_LEVEL_INFO);
+	log_set_console_output(false);
+	log_set_level(LOG_LEVEL_DEBUG);
 #endif
+	_mkdir("Log");
+	log_set_file_output("Log/darkeden.log");
 
 	g_pFileDef = new Properties;
 	g_pFileDef->load("Data/Info/FileDef.inf");
@@ -1658,7 +1662,37 @@ InitGame()
 	//----------------------------------------------------------------------
 	DEBUG_ADD("[ InitGame ]  Socket - Socket initialized");
 
-	// Note: mingw socket (POSIX-compatible) doesn't need WSAStartup like WinSock
+	// This is a real Windows/MSVC build using real Winsock (see the
+	// "A successful WSAStartup must occur..." errors thrown from
+	// SocketAPI.cpp when this is skipped) - the assumption that mingw/POSIX
+	// sockets are in use here was wrong for this build target and left
+	// every connect() attempt failing before ever reaching the network.
+	// NOTE: use _WIN32/_WIN64 here, not PLATFORM_WINDOWS - basic/Platform.h
+	// only defines PLATFORM_WINDOWS when PLATFORM_USE_SDL is NOT set, and
+	// this project builds with PLATFORM_USE_SDL on Windows, so that guard
+	// is always false here and silently compiles this block out.
+#if defined(_WIN32) || defined(_WIN64)
+	{
+		static bool s_bWSAStarted = false;
+		if (!s_bWSAStarted)
+		{
+			WSADATA wsaData;
+			// MAKEWORD(2, 2) inlined - that macro isn't visible here since
+			// PLATFORM_WINDOWS (and thus the normal windows.h pull-in) is
+			// off for this SDL build; 0x0202 requests Winsock 2.2.
+			int wsaResult = WSAStartup(0x0202, &wsaData);
+			if (wsaResult == 0)
+			{
+				s_bWSAStarted = true;
+				DEBUG_ADD("[ InitGame ]  Socket - WSAStartup OK");
+			}
+			else
+			{
+				DEBUG_ADD_FORMAT("[ InitGame ]  Socket - WSAStartup FAILED, error=%d", wsaResult);
+			}
+		}
+	}
+#endif
 
 //	#ifdef _DEBUG
 //		bool bMerge = false;
@@ -1810,11 +1844,7 @@ InitGame()
 			// Login Mode로 시작한다.
 			//SetMode( MODE_OPENING );
 
-			// Debug: Check g_Mode before and after SetMode
-			extern enum CLIENT_MODE g_Mode;
-			printf("DEBUG: Before SetMode, g_Mode = %d\n", g_Mode);
 			SetMode( MODE_MAINMENU );
-			printf("DEBUG: After SetMode, g_Mode = %d\n", g_Mode);
 			//SetMode( MODE_WAIT_POSITION );
 		///*
 		// Server에 접속이 안될 때 사용하는 code
@@ -2030,7 +2060,7 @@ InitSocket()
 						throw ConnectException("LoginServer의 주소를 찾을 수 없습니다.");
 					}
 
-					char* pIP = (char*)inet_ntoa(*((struct in_addr*)h->h_addr));
+					char* pIP = (char*)inet_ntoa(*((struct in_addr*)h->h_addr_list[0]));
 
 					ServerAddress = pIP;
 				}

@@ -19,9 +19,13 @@
 #pragma warning(disable:4786)
 
 #ifdef PLATFORM_WINDOWS
-#include <Windows.h>
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-#include "../../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+#include <Platform.h>
 #endif
 #include <map>
 #include <string>
@@ -111,7 +115,7 @@ extern Profiler* g_pProfiler;
 
 #ifdef OUTPUT_DEBUG
 	#define __BEGIN_PROFILE(name)	if (g_pProfiler!=NULL) g_pProfiler->Begin(name);
-	#define __END_PROFILE(name)		if (g_pProfiler!=NULL) g_pProfiler->End(name);	
+	#define __END_PROFILE(name)		if (g_pProfiler!=NULL) g_pProfiler->End(name);
 #else
 	#define __BEGIN_PROFILE(name)	((void)0);
 	#define __END_PROFILE(name)		((void)0);

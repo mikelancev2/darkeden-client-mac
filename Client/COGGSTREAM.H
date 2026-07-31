@@ -15,7 +15,7 @@ class COGGSTREAM
 public:
 	COGGSTREAM(void* pDirectSound, CDirectSoundBuffer* pBuffer,
 	           unsigned long ulMin, unsigned long ulMax,
-	           unsigned long ulFlags, unsigned long ulBufferSize);
+	           unsigned long ulFlags, unsigned long ulBufferSize = 0);
 	~COGGSTREAM();
 
 	bool streamLoad(FILE* file, tag_position_set* pos);

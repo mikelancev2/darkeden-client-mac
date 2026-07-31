@@ -25,8 +25,6 @@ void	SendBugReport(const char *bug, ...);
 ClientCommunicationManager::ClientCommunicationManager ()
 : m_pDatagramSocket(NULL)
 {
-    __BEGIN_TRY
-
 	try {
 		// create datagram server socket
 		m_pDatagramSocket = new DatagramSocket( g_pClientConfig->CLIENT_COMMUNICATION_UDP_PORT );
@@ -39,13 +37,9 @@ ClientCommunicationManager::ClientCommunicationManager ()
 		// Note: Socket creation may fail if port is in use, continue without P2P communication
 		m_pDatagramSocket = NULL;
 	}
-
-    // Note: Use empty statement instead of __END_CATCH to avoid re-throwing exceptions
-    // P2P communication is optional, client can function without it
-    }
-
-    catch (...) {
+	catch (...) {
         // Catch-all to prevent constructor from propagating exceptions
+		m_pDatagramSocket = NULL;
     }
 }
 

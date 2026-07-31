@@ -2,10 +2,14 @@
 #define __CTYPEPACKVECTOR_H__
 
 #ifdef PLATFORM_WINDOWS
-	#include <windows.h>
+	#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
+#include <windows.h>
+#endif
 	#include <fstream.h>
 #else
-	#include "../basic/Platform.h"
+	#include <Platform.h>
 	#include <fstream>
 	#include <cstring>
 	using namespace std;

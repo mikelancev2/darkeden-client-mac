@@ -1,6 +1,7 @@
 #include "client_PCH.h"
 #include "MPalette.h"
-#include <fstream>\nusing namespace std;
+#include <fstream>
+using namespace std;
 
 MPalette::MPalette()
 {

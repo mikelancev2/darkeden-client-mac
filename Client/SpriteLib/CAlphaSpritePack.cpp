@@ -89,7 +89,7 @@ CAlphaSpritePack::ReleasePart(TYPE_SPRITEID firstSpriteID, TYPE_SPRITEID lastSpr
 		|| firstSpriteID >= m_nSprites)
 		return;
 
-	int last = min(lastSpriteID, m_nSprites-1);
+	TYPE_SPRITEID last = (lastSpriteID < m_nSprites - 1) ? lastSpriteID : (m_nSprites - 1);
 
 	for (int id=firstSpriteID; id<=last; id++)
 	{

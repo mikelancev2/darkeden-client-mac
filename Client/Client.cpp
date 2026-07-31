@@ -44,13 +44,17 @@ APICheck _APICheck;
 // Include files
 //-----------------------------------------------------------------------------
 #ifdef PLATFORM_WINDOWS
-#include <Windows.h>
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-#include "../../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+#include <Platform.h>
 #endif
 #include <stdio.h>
 #include <stdarg.h>
-#ifdef PLATFORM_WINDOWS
+#if defined(_WIN32) || defined(_WIN64)
 #include <io.h>
 #include <direct.h>
 #include <crtdbg.h>

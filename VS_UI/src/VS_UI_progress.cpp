@@ -67,7 +67,8 @@ C_VS_UI_PROGRESS::C_VS_UI_PROGRESS()
 	}
 	Check[num] = true;
 	CheckNum--;
-	
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_PROGRESS ctor: num=%d, PROGRESS_MAX=%d\n", num, PROGRESS_MAX); fclose(f); } }
+
 	m_pC_progress = NULL;
 	m_pC_event_progress = NULL;
 	m_pC_character = NULL;
@@ -108,11 +109,16 @@ C_VS_UI_PROGRESS::C_VS_UI_PROGRESS()
 		progress_file.close();
 		
 		m_pC_character = new CSpritePack;
-		
+
 		m_pC_character->Init(2);
-		m_pC_character->LoadFromFileData(0, num*2, SPK_PROGRESS_CHARACTER, SPKI_PROGRESS_CHARACTER);
-		m_pC_character->LoadFromFileData(1, num*2+1, SPK_PROGRESS_CHARACTER, SPKI_PROGRESS_CHARACTER);
-		
+		{
+			bool ok0 = m_pC_character->LoadFromFileData(0, num*2, SPK_PROGRESS_CHARACTER, SPKI_PROGRESS_CHARACTER);
+			bool ok1 = m_pC_character->LoadFromFileData(1, num*2+1, SPK_PROGRESS_CHARACTER, SPKI_PROGRESS_CHARACTER);
+			FILE* f = fopen("Log/ui_debug.log", "a");
+			if (f) { fprintf(f, "C_VS_UI_PROGRESS ctor: LoadFromFileData(0,%d)=%d LoadFromFileData(1,%d)=%d\n", num*2, (int)ok0, num*2+1, (int)ok1); fclose(f); }
+		}
+
+
 		m_pack_file.SetRAR(RPK_PROGRESS, RPK_PASSWORD);
 		
 		PrintInfo pi, title_pi;
@@ -189,8 +195,11 @@ C_VS_UI_PROGRESS::C_VS_UI_PROGRESS()
 		SetDescTitle(400, 120, title_color, title_pi);
 		SetDescTitle(Monster[num]);
 
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_PROGRESS ctor: before Set/(*m_pC_progress)[BACK], m_pC_progress=%p\n", (void*)m_pC_progress); fclose(f); } }
 		Set(0, 0, (*m_pC_progress)[BACK].GetWidth(), (*m_pC_progress)[BACK].GetHeight());
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_PROGRESS ctor: after Set/(*m_pC_progress)[BACK]\n"); fclose(f); } }
 	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_PROGRESS ctor: end reached OK\n"); fclose(f); } }
 	
 
 	m_world_name = "";

@@ -298,7 +298,8 @@ throw ( ProtocolException , Error )
 			}
 		}
 		break;
-	}	
+	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after race switch, before nickname\n"); fclose(f); } }
 	// 2004, 6, 4 sobeit add start - sms charge
 	g_char_slot_ingame.m_SMS_Charge		= pPacket->GetSMSCharge();
 	// 2004, 6, 4 sobeit add end - sms charge
@@ -364,6 +365,7 @@ throw ( ProtocolException , Error )
 		g_pStorage = NULL;		
 	}
 
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: before UI_Unlock/Close cleanup calls\n"); fclose(f); } }
 	//-----------------------------------------------------------
 	// 정리 정리~~
 	//-----------------------------------------------------------
@@ -405,13 +407,16 @@ throw ( ProtocolException , Error )
 	g_pArmsBand2 = NULL;
 
 				
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: before UI_StartProgress\n"); fclose(f); } }
 	UI_StartProgress( pPacket->getZoneID() );
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after UI_StartProgress, before UI_DrawProgress\n"); fclose(f); } }
 
-	//UI_SetCurrentServerName(g_pServerInformation->GetServerGroupName(), 
-	//						g_pServerInformation->GetServerName(), 
+	//UI_SetCurrentServerName(g_pServerInformation->GetServerGroupName(),
+	//						g_pServerInformation->GetServerName(),
 	//						g_pServerInformation->GetServerStatus());
 
 	UI_DrawProgress(0);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after UI_DrawProgress, before topview init\n"); fclose(f); } }
 
 	DEBUG_ADD("Init g_pTopView");
 	
@@ -563,7 +568,9 @@ throw ( ProtocolException , Error )
 	//			Inventory 초기화
 	//
 	//--------------------------------------------------
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: before SetInventoryInfo\n"); fclose(f); } }
 	SetInventoryInfo( pPacket->getInventoryInfo() );
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after SetInventoryInfo\n"); fclose(f); } }
 
 
 	//--------------------------------------------------
@@ -628,11 +635,13 @@ throw ( ProtocolException , Error )
 	}
 
 	UI_DrawProgress(17);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: before SetAvailableSkills\n"); fclose(f); } }
 
 	//--------------------------------------------------
 	// 현재 사용 가능한 skill들을 다시 체크한다.
 	//--------------------------------------------------
 	g_pSkillAvailable->SetAvailableSkills();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after SetAvailableSkills, before NPC/Monster loop\n"); fclose(f); } }
 
 	//--------------------------------------------------
 	//
@@ -747,9 +756,10 @@ throw ( ProtocolException , Error )
 	{
 		UI_DrawProgress( 70 );
 	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after NPC/Monster loop, before Load Zone\n"); fclose(f); } }
 
 	//--------------------------------------------------
-	// Zone Loading...			
+	// Zone Loading...
 	//--------------------------------------------------
 	// 게임 중이었으면.. Zone 이동.
 	DEBUG_ADD( "Load Zone" );
@@ -760,6 +770,7 @@ throw ( ProtocolException , Error )
 	g_pPlayer->SetX( pPacket->getZoneX() );
 	g_pPlayer->SetY( pPacket->getZoneY() );
 
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: before MoveZone/LoadZone, previousMode=%d\n", (int)previousMode); fclose(f); } }
 	if (previousMode == MODE_GAME)
 	{
 		MoveZone( pPacket->getZoneID() );
@@ -769,9 +780,11 @@ throw ( ProtocolException , Error )
 	{
 		LoadZone( pPacket->getZoneID() );
 	}
-	
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after MoveZone/LoadZone, before setEncryptCode\n"); fclose(f); } }
+
 	// Packet Encrypt
 	g_pSocket->setEncryptCode();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after setEncryptCode, before NPC coord loop\n"); fclose(f); } }
 
 	//-----------------------------------------------------------
 	//
@@ -802,8 +815,9 @@ throw ( ProtocolException , Error )
 
 		UI_SetNPCInfo( pName, npcID, x, y );
 
-		delete pInfo;		
+		delete pInfo;
 	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after NPC coord loop, before SetEffectInfo\n"); fclose(f); } }
 
 	//--------------------------------------------------
 	//
@@ -845,8 +859,8 @@ throw ( ProtocolException , Error )
 
 
 	SetEffectInfo( g_pPlayer, pPacket->getEffectInfo(), delayedFrame );
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after SetEffectInfo, before UI_DrawProgress(100)\n"); fclose(f); } }
 
-	
 	UI_DrawProgress(100);
 	UI_DrawProgress(100);
 
@@ -897,8 +911,8 @@ throw ( ProtocolException , Error )
 	g_SkillAvailable.AddSkill( MAGIC_CURE_PARALYSIS );
 	*/
 
-	UI_EndProgress();	
-
+	UI_EndProgress();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after UI_EndProgress, before UnSetMute/SetHP\n"); fclose(f); } }
 
 	//-----------------------------------------------------------
 	// Sound를 출력할 수 있게 한다.
@@ -907,6 +921,7 @@ throw ( ProtocolException , Error )
 
 	// blood drain체크때메 함 더 출력 ㅡ.ㅡ
 	UI_SetHP( g_pPlayer->GetHP(), g_pPlayer->GetMAX_HP() );
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "GCUpdateInfoHandler::execute: after UI_SetHP, near end\n"); fclose(f); } }
 	
 	//UI_AffectUserOption();
 

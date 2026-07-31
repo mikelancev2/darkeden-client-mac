@@ -41,6 +41,7 @@
 //#include "MFileDef.h"
 #include "Properties.h"
 #include "ServerInfo.h"
+#include "DebugLog.h"
 #include "DebugInfo.h"
 #include "GuildInfo.h"
 #include "MGuildInfoMapper.h"
@@ -1583,12 +1584,14 @@ UI_AcquirePDSClosedMessage()
 //-----------------------------------------------------------------------------
 // Change To Vampire Interface
 //-----------------------------------------------------------------------------
-void		
+void
 UI_ChangeInterfaceRace(Race race)
 {
 	//UI_SaveUserOption();
 
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: enter, race=%d\n", (int)race); fclose(f); } }
 	bool bLevelUp = gC_vs_ui.IsRunningLevelUp();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: bLevelUp=%d, before switch\n", (int)bLevelUp); fclose(f); } }
 
 	switch(race)
 	{
@@ -1604,24 +1607,35 @@ UI_ChangeInterfaceRace(Race race)
 		gC_vs_ui.ChangeToOustersInterface();
 		break;
 	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: after race switch, before LevelUp check\n"); fclose(f); } }
 
 	if(bLevelUp)
+	{
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: before gC_vs_ui.LevelUp()\n"); fclose(f); } }
 		gC_vs_ui.LevelUp();
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: after gC_vs_ui.LevelUp()\n"); fclose(f); } }
+	}
 
 	// UI에 정보 설정
 	int zoneID = (g_bZonePlayerInLarge? g_nZoneLarge : g_nZoneSmall);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: zoneID=%d, g_pZone=%p\n", zoneID, (void*)g_pZone); fclose(f); } }
 
 	if (g_pZone!=NULL)
 	{
 		SIZE zoneSize = { g_pZone->GetWidth(), g_pZone->GetHeight() };
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: before SetZone/SetSize\n"); fclose(f); } }
 		gC_vs_ui.SetZone( zoneID );
 		gC_vs_ui.SetSize( zoneSize );
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: before LoadZoneInfo\n"); fclose(f); } }
 
 		// 안전지대 정보 등.. 다시 설정해준다.
 		LoadZoneInfo(zoneID);
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: after LoadZoneInfo\n"); fclose(f); } }
 	}
 
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: before UI_AffectUserOption\n"); fclose(f); } }
 	UI_AffectUserOption();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "UI_ChangeInterfaceRace: end reached OK\n"); fclose(f); } }
 }
 
 //-----------------------------------------------------------------------------
@@ -3212,13 +3226,29 @@ UI_UnlockGear()
 //-----------------------------------------------------------------------------
 void UI_ResultReceiver(DWORD message, int left, int right, void *void_ptr)
 {
-//	DEBUG_ADD("[UI_ResultReceiver] Start");
+	{
+		// This fires very often (every queued UI message - HP updates,
+		// movement, etc.), so unlike the rest of this session's ui_debug.log
+		// checkpoints (which each only fire on one-time state transitions),
+		// re-opening/closing the file here on every single call was a real,
+		// measurable per-frame cost. Keep one handle open for the process
+		// lifetime instead - the OS reclaims it on exit either way.
+		static FILE* s_pLogFile = NULL;
+		if (s_pLogFile == NULL)
+		{
+			s_pLogFile = fopen("Log/ui_debug.log", "a");
+		}
+		if (s_pLogFile != NULL)
+		{
+			fprintf(s_pLogFile, "UI_ResultReceiver: message=%lu g_Mode=%d\n", (unsigned long)message, (int)g_Mode);
+		}
+	}
 	if (g_pUIMessageManager==NULL)
 	{
 		g_pUIMessageManager = new UIMessageManager;
 	}
-	
-	g_pUIMessageManager->Execute(message, left, right, void_ptr);	
+
+	g_pUIMessageManager->Execute(message, left, right, void_ptr);
 //	DEBUG_ADD("[UI_ResultReceiver] End");
 }
 
@@ -4003,26 +4033,26 @@ void		UI_RunAskGoBilingPage(int n)
 }
 
 void		UI_RunQuestList(GCSelectQuestID *pPacket)
-{		
+{
 	if( g_pQuestInfoManager == NULL || pPacket->empty())
 		return;
 
 	g_pPlayer->SetWaitVerifyNULL();
-	g_pPCTalkBox->Release();	
+	g_pPCTalkBox->Release();
 	g_pPCTalkBox->SetType( PCTalkBox::SELECT_QUEST );
 
 	if( g_pPCTalkBox->GetCreatureType() == 17 || g_pPCTalkBox->GetCreatureType() == 255 || g_pPCTalkBox->GetCreatureType() == 653)			// 카이저면, 레베카면
 	{
 		char tempstr[128] = {0,};
-			
+
 		while( !pPacket->empty() )
 		{
-			char str[256];
-			QuestID_t	ID = pPacket->popQuestID();		
-			QUEST_INFO* mkq = g_pQuestInfoManager->GetInfo( ID );		
+			char str[256] = {0};
+			QuestID_t	ID = pPacket->popQuestID();
+			QUEST_INFO* mkq = g_pQuestInfoManager->GetInfo( ID );
 			if(NULL != mkq )
 			{
-				DWORD time = mkq->GetTimeLimit();				
+				DWORD time = mkq->GetTimeLimit();
 				DWORD minute = (time / 60) % 60;
 				DWORD hour = (time / 60 / 60);
 				bool bContinue = false;
@@ -4064,22 +4094,32 @@ void		UI_RunQuestList(GCSelectQuestID *pPacket)
 					}
 					break;
 				case QUEST_INFO_GATHER_ITEM :
+					// fix: this case never wrote to str, and str was
+					// declared uninitialized above - g_pPCTalkBox->SetContent(str)
+					// below then read whatever garbage happened to be on the
+					// stack as a C-string (unbounded strlen/copy), which
+					// could read past the buffer and crash. str is now
+					// zero-initialized as a safety net regardless, but also
+					// give gather-item quests a real description instead of
+					// staying blank, using the same table entry MTopView.cpp's
+					// quest-progress HUD uses for this same quest type.
+					wsprintf(str,(*g_pGameStringTable)[UI_STRING_MESSAGE_GATHER_ITEM].GetString(),mkq->GetName());
 					break;
 				case QUEST_INFO_MINI_GAME :
 					wsprintf(str, (*g_pGameStringTable)[STRING_MESSAGE_SELECT_MINI_GAME].GetString() );
 					selectType = 1;
 					break;
-				}		
+				}
 				g_pPCTalkBox->SetContent( str );
 
 				if( selectType == 0 )
 				{
-					wsprintf(tempstr,"%4d%s",ID,(*g_pGameStringTable)[STRING_MESSAGE_YES_I_SEE].GetString() );		
-					g_pPCTalkBox->AddString( tempstr );				
+					wsprintf(tempstr,"%4d%s",ID,(*g_pGameStringTable)[STRING_MESSAGE_YES_I_SEE].GetString() );
+					g_pPCTalkBox->AddString( tempstr );
 				} else
 				{
 					wsprintf(tempstr,"%4d",ID);
-					
+
 					switch( mkq->GetGameType() )
 					{
 					case GAME_MINE :
@@ -4094,7 +4134,7 @@ void		UI_RunQuestList(GCSelectQuestID *pPacket)
 				}
 			}
 		}
-//		wsprintf(tempstr,"9999%s",g_pPlayer->IsSlayer() ? 
+//		wsprintf(tempstr,"9999%s",g_pPlayer->IsSlayer() ?
 //					(*g_pGameStringTable)[STRING_MESSAGE_CANCEL_MONSTER_KILL_QUEST].GetString() :
 //					(*g_pGameStringTable)[STRING_MESSAGE_CANCEL_QUEST_VAMPIRE].GetString() );		
 //				g_pPCTalkBox->AddString( tempstr );	
@@ -4431,7 +4471,7 @@ void	UI_RunHorn(int currentZoneID)
 void		UI_MasterLairMessage(BYTE type, short value, TYPE_ZONEID ZoneID)
 {
 	if( g_pUserOption->DoNotShowLairMsg || g_pSystemMessage == NULL || g_pZoneTable == NULL || g_pGameStringTable == NULL )
-		return;	
+		return;
 
 	MString msg;
 	

@@ -16,7 +16,7 @@
 #define __GAME_CLIENT__
 
 /* Platform types */
-#include "../basic/Platform.h"
+#include <Platform.h>
 
 /* Standard C++ library */
 #include <stdio.h>
@@ -25,6 +25,7 @@
 #include <math.h>
 #include <time.h>
 #include <iostream>
+#include <algorithm>
 
 /* Use standard namespace for convenience */
 using namespace std;

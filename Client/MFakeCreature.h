@@ -58,36 +58,48 @@ class Comparison {
 		// true : right를 선택한다.
 		// false : left를 선택한다.
 		bool operator () (DNode * left, DNode * right) const
-		{ 
-			int diff = left->distance - right->distance;			
+		{
+			int diff = left->distance - right->distance;
 			int s = left->step - right->step;
 
 			// 거리가(diff) 같은 경우..
 			if (diff==0)
-			{			
+			{
 				// 움직인 회수가 같은 경우
 				if (s==0)
 				{
+					// fix: see MPlayer.h's Comparison for the same bug - this
+					// used to look only at `right`'s own parent/direction match
+					// regardless of argument order, so comp(A,B) and comp(B,A)
+					// could both return true, violating strict-weak-ordering
+					// (crashes MSVC's debug STL, silent UB in Release).
 					if (left->pParent!=NULL && right->pParent!=NULL)
 					{
-						if (right->pParent->direction == right->direction)
+						bool leftStraight = (left->pParent->direction == left->direction);
+						bool rightStraight = (right->pParent->direction == right->direction);
+
+						if (rightStraight && !leftStraight)
 						{
 							return true;	// right선택
 						}
-						
-						return false;	// left선택						
+						if (leftStraight && !rightStraight)
+						{
+							return false;	// left선택
+						}
 					}
+
+					return false;
 				}
 				// 움직인 회수가 적은 것
-				else if (s>0) 
+				else if (s>0)
 				{
 					return true;
 				}
-				
-				return false;				
-			}			
+
+				return false;
+			}
 			// 거리가 적은 것
-			else if (diff>0) return true; 
+			else if (diff>0) return true;
 
 			return false;
 		}

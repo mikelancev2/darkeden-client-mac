@@ -8,10 +8,14 @@
 #define	__CWINUPDATE_H__
 
 #ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <Windows.h>
+#endif
 #include <MMSystem.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #endif
 
 class CWinUpdate {

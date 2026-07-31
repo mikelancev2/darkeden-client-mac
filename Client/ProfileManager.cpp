@@ -2,7 +2,7 @@
 // ProfileManager.cpp
 //----------------------------------------------------------------------
 #include "Client_PCH.h"
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
 #include <direct.h>
 #include <io.h>
 #else
@@ -433,7 +433,7 @@ ProfileManager::InitProfiles()
 		else
 		{
 			// DIR_PROFILE이 없다면.. 생성..
-#ifdef PLATFORM_WINDOWS
+#if defined(PLATFORM_WINDOWS) || defined(PLATFORM_WIN32_HOST)
 			_mkdir( g_pFileDef->getProperty("DIR_PROFILE").c_str() );
 #else
 			mkdir( g_pFileDef->getProperty("DIR_PROFILE").c_str(), 0755 );

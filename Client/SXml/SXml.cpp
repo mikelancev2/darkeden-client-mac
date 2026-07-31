@@ -81,7 +81,7 @@ string XMLUtil::WideCharToString(const wchar_t * wstr, int wstrlen)
 	string strBuffer;
 	strBuffer.reserve( wstrlen * 2 + 1 );		// capacity 를 충분하게..
 	int nCopied = WideCharToMultiByte(
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(PLATFORM_USE_SDL)
 		CP_OEMCP,
 		WC_COMPOSITECHECK,
 #else

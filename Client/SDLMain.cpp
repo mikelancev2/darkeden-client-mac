@@ -18,12 +18,32 @@
 
 #ifndef PLATFORM_WINDOWS
 
+#define SDL_MAIN_HANDLED
 #include "Client_PCH.h"
+#if __has_include(<SDL2/SDL.h>)
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_main.h>
+#else
+#include <SDL.h>
+#endif
 #include <SDL_ttf.h>
 #include <string.h>
 #include <stdio.h>
+#if defined(PLATFORM_WIN32_HOST)
+#include <direct.h>
+#define getcwd _getcwd
+#endif
+
+#ifndef SDLMAIN_VERBOSE_LOG
+#define SDLMAIN_VERBOSE_LOG 0
+#endif
+
+#if SDLMAIN_VERBOSE_LOG
+#define SDLMAIN_LOG(...) do { printf(__VA_ARGS__); } while (0)
+#define SDLMAIN_DEBUG(...) do { fprintf(stderr, __VA_ARGS__); fflush(stderr); } while (0)
+#else
+#define SDLMAIN_LOG(...) do {} while (0)
+#define SDLMAIN_DEBUG(...) do {} while (0)
+#endif
 
 // Client.h - must be included to access g_pUpdate declaration
 #include "Client.h"
@@ -40,9 +60,107 @@
 #include "ClientDef.h"
 #include "MTopView.h"
 #include "MPlayer.h"
-#include "../basic/Platform.h"
+#include <Platform.h>
 #include "Packet/Exception.h"  // For NoSuchElementException, Throwable
 #include "DXLib/DXLibBackend.h"  // For dxlib_input_update
+#include <eh.h>  // _set_se_translator - see SEHException below
+
+// Structured exceptions (access violation, etc.) surface here as an
+// unhelpful "Unknown exception" with no message, since catch(...) also
+// swallows SEH under this project's exception-handling mode. Translating
+// them into a real C++ exception lets us at least log the exception code
+// and faulting address before the process exits, instead of a silent close.
+//
+// Minimal ABI-compatible mirror of the real Win32 EXCEPTION_RECORD/
+// EXCEPTION_POINTERS (stable, documented layout) - avoids pulling in a full
+// <windows.h> here (that previously broke GetLastError visibility
+// elsewhere in this codebase), same pattern as basic/Platform.h's other
+// hand-rolled Win32 struct mirrors (WSADATA, DDGAMMARAMP, ...).
+struct DE_EXCEPTION_RECORD
+{
+	unsigned long ExceptionCode;
+	unsigned long ExceptionFlags;
+	void* ExceptionRecordPtr;
+	void* ExceptionAddress;
+	unsigned long NumberParameters;
+	unsigned long ExceptionInformation[15];
+};
+struct DE_EXCEPTION_POINTERS
+{
+	DE_EXCEPTION_RECORD* ExceptionRecord;
+	void* ContextRecord;
+};
+
+class SEHException : public std::exception
+{
+public:
+	unsigned int m_code;
+	void* m_exceptionAddress;
+	bool m_hasAccessInfo;
+	unsigned long m_accessType;   // 0=read, 1=write, 8=DEP/execute
+	unsigned long m_faultAddress;
+	unsigned long m_callStack[16];
+	int m_callStackCount;
+
+	SEHException(unsigned int code, struct _EXCEPTION_POINTERS* pExpRaw)
+		: m_code(code), m_exceptionAddress(NULL), m_hasAccessInfo(false), m_accessType(0), m_faultAddress(0), m_callStackCount(0)
+	{
+		DE_EXCEPTION_POINTERS* pExp = reinterpret_cast<DE_EXCEPTION_POINTERS*>(pExpRaw);
+		if (pExp && pExp->ExceptionRecord)
+		{
+			m_exceptionAddress = pExp->ExceptionRecord->ExceptionAddress;
+			if (pExp->ExceptionRecord->NumberParameters >= 2)
+			{
+				m_hasAccessInfo = true;
+				m_accessType = pExp->ExceptionRecord->ExceptionInformation[0];
+				m_faultAddress = pExp->ExceptionRecord->ExceptionInformation[1];
+			}
+		}
+
+		// Walk the EBP chain from the crash's own CONTEXT (x86 only - this
+		// project builds Win32). Reading raw offsets into the x86 CONTEXT
+		// struct instead of the real type for the same reason as
+		// DE_EXCEPTION_POINTERS above (avoid a full <windows.h> here):
+		// Ebp is at byte offset 180, Eip at 184 in the real CONTEXT layout.
+		// Only the leaf frame's address (Ebp+4 = return address) was ever
+		// visible before this - with several possible unguarded-pack call
+		// sites already patched, walking the full chain is what actually
+		// tells us WHICH caller still has an unguarded/null access, instead
+		// of guessing site by site again.
+		if (pExp && pExp->ContextRecord)
+		{
+			unsigned char* ctx = (unsigned char*)pExp->ContextRecord;
+			unsigned long ebp = *(unsigned long*)(ctx + 180);
+
+			for (int i = 0; i < 16 && ebp != 0; i++)
+			{
+				// Sanity-check before dereferencing: must look like a real
+				// stack address, monotonically increasing (stack grows down,
+				// so caller frames have higher Ebp than callee frames).
+				if (ebp < 0x10000 || ebp > 0x7FFFFFFFUL)
+					break;
+
+				unsigned long retAddr = *(unsigned long*)(ebp + 4);
+				m_callStack[m_callStackCount++] = retAddr;
+
+				unsigned long nextEbp = *(unsigned long*)ebp;
+				if (nextEbp <= ebp)
+					break;
+				ebp = nextEbp;
+			}
+		}
+	}
+	const char* what() const noexcept override { return "structured exception"; }
+};
+
+void SEHTranslator(unsigned int code, struct _EXCEPTION_POINTERS* pExp)
+{
+	throw SEHException(code, pExp);
+}
+
+// For logging the module base only (see the SEHException catch block) -
+// avoids pulling in a full <windows.h> just for this one call.
+extern "C" __declspec(dllimport) HMODULE __stdcall GetModuleHandleA(const char* lpModuleName);
 
 // Language detection
 enum DARKEDEN_LANGUAGE
@@ -60,12 +178,44 @@ extern DARKEDEN_LANGUAGE CheckDarkEdenLanguage();
 extern enum CLIENT_MODE g_Mode;
 extern C_VS_UI gC_vs_ui;
 
+#ifdef main
+#undef main
+#endif
+
 //-----------------------------------------------------------------------------
 // SDL-specific globals
 //-----------------------------------------------------------------------------
 SDL_Window* g_pSDLWindow = NULL;
 SDL_Renderer* g_pSDLRenderer = NULL;
 bool g_bRunning = true;
+
+//-----------------------------------------------------------------------------
+// SDL_PresentGameBackBuffer
+//
+// Actually pushes g_pBack to the screen. CSDLGraphics::Flip() is a no-op
+// stub left over from the DirectDraw port - the real presentation only
+// happened here, inline in the main loop. Blocking modal loops elsewhere
+// (e.g. GameMain.cpp's "disconnected, press any key" dialog) call
+// CSDLGraphics::Flip() expecting a frame to be shown and then wait for
+// input, so without this they spin forever on a frame that was never
+// presented, looking like a frozen window.
+//-----------------------------------------------------------------------------
+void SDL_PresentGameBackBuffer()
+{
+	if (g_pLast != NULL && g_pBack != NULL) {
+		POINT origin = {0, 0};
+		g_pBack->Blt(&origin, g_pLast, NULL);
+	}
+
+	if (g_pBack != NULL) {
+		spritectl_surface_t backend_surface = g_pBack->GetBackendSurface();
+		if (backend_surface != SPRITECTL_INVALID_SURFACE) {
+			spritectl_present_surface(backend_surface, g_pSDLRenderer);
+		}
+	}
+
+	SDL_RenderPresent(g_pSDLRenderer);
+}
 
 //-----------------------------------------------------------------------------
 // Stub implementations for functions not available on non-Windows platforms
@@ -90,11 +240,22 @@ void ExecuteActionInfoFromMainNode(
 static BOOL InitApp(int nCmdShow)
 {
 	int cx = 800, cy = 600;
-	Uint32 flags = SDL_WINDOW_SHOWN;
+	// Created hidden and only revealed once InitGame() below has drawn a
+	// real frame (see SDL_ShowWindow near the end of this function). While
+	// shown-but-idle, InitGame()'s long synchronous load (no message pump,
+	// no repeated presents for ~1s+) leaves the swapchain's other backbuffer(s)
+	// exactly as the GPU driver initialized them - some drivers fill unused
+	// VRAM with a debug pattern (magenta/pink is a common one) - and since
+	// nothing re-presents during that window, Windows/DWM can show that
+	// stale buffer instead of the one black frame we already presented.
+	// That's the "flashes pink after the black frame, before the title art"
+	// startup glitch. Not showing the window until content is ready sidesteps
+	// this regardless of the exact GPU-driver behavior behind it.
+	Uint32 flags = SDL_WINDOW_HIDDEN;
 
 	// Determine window size and flags based on command line
 	extern bool g_bFullScreen;
-	extern bool g_MyFull;
+	extern BOOL g_MyFull;
 
 	if (g_bFullScreen) {
 		flags |= SDL_WINDOW_FULLSCREEN;
@@ -134,10 +295,22 @@ static BOOL InitApp(int nCmdShow)
 		return FALSE;
 	}
 
+	// Prefer the Direct3D11 SDL2 render backend - matches
+	// Data/Info/ClientModern.ini's SDL2RenderDriver=direct3d11 from the
+	// legacy client's own experimental SDL2 bridge. Without this hint SDL2
+	// auto-picks a driver (order varies by SDL2 build/GPU/drivers - can land
+	// on direct3d9 or opengl instead), so this is what actually pins down
+	// which backend gets used instead of leaving it to chance. Harmless if
+	// unavailable: SDL_CreateRenderer falls back to auto-selection below.
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d11");
+
 	// Create SDL renderer
+	// NOTE: no SDL_RENDERER_PRESENTVSYNC - the original client never vsync-
+	// locked either (players routinely saw 200+ FPS), and capping to the
+	// monitor's refresh rate (~58-60fps here) was a regression vs that.
 	g_pSDLRenderer = SDL_CreateRenderer(
 		g_pSDLWindow, -1,
-		SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
+		SDL_RENDERER_ACCELERATED
 	);
 
 	if (!g_pSDLRenderer) {
@@ -150,6 +323,14 @@ static BOOL InitApp(int nCmdShow)
 	if (SDL_SetRenderDrawColor(g_pSDLRenderer, 0, 0, 0, 255) != 0) {
 		fprintf(stderr, "Failed to set render draw color: %s\n", SDL_GetError());
 	}
+
+	// Present one black frame immediately. Without this, the window is
+	// shown (SDL_WINDOW_SHOWN) with its back buffer never cleared/presented
+	// yet, so the OS displays whatever was already in that GPU memory until
+	// InitGame() finishes its (lengthy) loading and the first real frame is
+	// presented - visible as a brief flash of garbage/pink on startup.
+	SDL_RenderClear(g_pSDLRenderer);
+	SDL_RenderPresent(g_pSDLRenderer);
 
 	// Hide cursor
 	SDL_ShowCursor(0);
@@ -165,6 +346,26 @@ static BOOL InitApp(int nCmdShow)
 		fprintf(stderr, "Failed to initialize game\n");
 		return FALSE;
 	}
+
+	// GameInit.cpp's DrawTitleLoading() runs several times during the loading
+	// steps above and draws a "please wait" sprite straight onto g_pBack;
+	// whatever it left there when InitGame() returned would otherwise be the
+	// very first thing shown (that transient loading-sprite content, not the
+	// real title screen). Clear BOTH buffers - SDL_PresentGameBackBuffer()
+	// below copies g_pLast over g_pBack unconditionally, so clearing g_pBack
+	// alone would just get overwritten again by g_pLast's own leftovers.
+	if (g_pLast != NULL) {
+		g_pLast->FillSurface(0);
+	}
+	if (g_pBack != NULL) {
+		g_pBack->FillSurface(0);
+	}
+
+	// Push whatever InitGame() has drawn by now (the title screen) to the
+	// backbuffer and only THEN reveal the window, so the very first frame
+	// the user ever sees is real content - see the flags comment above.
+	SDL_PresentGameBackBuffer();
+	SDL_ShowWindow(g_pSDLWindow);
 
 	return TRUE;
 }
@@ -194,9 +395,9 @@ static void CleanupSDL()
  *-----------------------------------------------------------------------------*/
 int main(int argc, char* argv[])
 {
-	// Immediate debug output (flushed)
-	fprintf(stderr, "DEBUG: Dark Eden SDL2 starting...\n");
-	fflush(stderr);
+	_set_se_translator(SEHTranslator);
+
+	SDLMAIN_DEBUG("DEBUG: Dark Eden SDL2 starting...\n");
 
 	// Parse command line
 	const char* cmdLine = "0000000001";  // Default: window mode
@@ -204,19 +405,16 @@ int main(int argc, char* argv[])
 		cmdLine = argv[1];
 	}
 
-	fprintf(stderr, "Command line: %s\n", cmdLine);
-	fflush(stderr);
-
-	printf("========================================\n");
-	printf("Dark Eden Client (SDL2 Backend)\n");
-	printf("Based on Client.cpp WinMain\n");
-	printf("========================================\n");
-	printf("Command line: %s\n", cmdLine);
-	printf("\n");
-	fflush(stdout);
+	SDLMAIN_DEBUG("Command line: %s\n", cmdLine);
+	SDLMAIN_LOG("========================================\n");
+	SDLMAIN_LOG("Dark Eden Client (SDL2 Backend)\n");
+	SDLMAIN_LOG("Based on Client.cpp WinMain\n");
+	SDLMAIN_LOG("========================================\n");
+	SDLMAIN_LOG("Command line: %s\n", cmdLine);
+	SDLMAIN_LOG("\n");
 
 	// Global variables from WinMain
-	extern bool g_MyFull;
+	extern BOOL g_MyFull;
 	extern bool g_bFullScreen;
 	extern RECT g_GameRect;
 	extern int g_x, g_y;
@@ -311,18 +509,18 @@ int main(int argc, char* argv[])
 	// On macOS/Linux, use getcwd() to get current directory
 	// Note: When running from DarkEden directory, this should already be correct
 	if (getcwd(g_CWD, _MAX_PATH) != NULL) {
-		printf("Working directory: %s\n", g_CWD);
+		SDLMAIN_LOG("Working directory: %s\n", g_CWD);
 	} else {
 		// Fallback to "." if getcwd fails
 		g_CWD[0] = '.';
 		g_CWD[1] = '\0';
-		printf("Working directory: . (getcwd failed)\n");
+		SDLMAIN_LOG("Working directory: . (getcwd failed)\n");
 	}
 
 	//-----------------------------------------------------------------
 	// Initialize SDL2
 	//-----------------------------------------------------------------
-	printf("Initializing SDL2...\n");
+	SDLMAIN_LOG("Initializing SDL2...\n");
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_EVENTS) < 0) {
 		fprintf(stderr, "ERROR: SDL_Init failed: %s\n", SDL_GetError());
 		return 1;
@@ -330,7 +528,7 @@ int main(int argc, char* argv[])
 	atexit(SDL_Quit);
 
 	// Initialize SDL_ttf for font rendering
-	printf("Initializing SDL_ttf...\n");
+	SDLMAIN_LOG("Initializing SDL_ttf...\n");
 	if (TTF_Init() < 0) {
 		fprintf(stderr, "ERROR: TTF_Init failed: %s\n", TTF_GetError());
 		return 1;
@@ -341,7 +539,7 @@ int main(int argc, char* argv[])
 	// Initialize language and character input (IME)
 	// This MUST be done before InitGame() - same order as WinMain
 	//-----------------------------------------------------------------
-	printf("Detecting language and initializing IME...\n");
+	SDLMAIN_LOG("Detecting language and initializing IME...\n");
 	DARKEDEN_LANGUAGE Language = CheckDarkEdenLanguage();
 
 	// Override to Chinese for macOS/Linux builds with Chinese resources
@@ -351,25 +549,25 @@ int main(int argc, char* argv[])
 	{
 	case DARKEDEN_CHINESE:
 		gC_ci = new CI_CHINESE;
-		printf("Language: Chinese (Simplified)\n");
+		SDLMAIN_LOG("Language: Chinese (Simplified)\n");
 		break;
 
 	case DARKEDEN_KOREAN:
 		gC_ci = new CI_KOREAN;
-		printf("Language: Korean\n");
+		SDLMAIN_LOG("Language: Korean\n");
 		break;
 
 	default:
 		// Default to Chinese for non-Windows platforms
 		gC_ci = new CI_CHINESE;
-		printf("Language: Chinese (Simplified - default)\n");
+		SDLMAIN_LOG("Language: Chinese (Simplified - default)\n");
 		break;
 	}
 
 	//-----------------------------------------------------------------
 	// Initialize App (create window, init game)
 	//-----------------------------------------------------------------
-	printf("Initializing application...\n");
+	SDLMAIN_LOG("Initializing application...\n");
 	int nCmdShow = 1;  // Default: show window
 
 	// Frame rate tracking variables (declared outside InitApp block for cleanup access)
@@ -391,30 +589,30 @@ int main(int argc, char* argv[])
 			if (gC_ci->IsKorean())
 			{
 				g_pUserInformation->SetKorean();
-				printf("User language set to: Korean\n");
+				SDLMAIN_LOG("User language set to: Korean\n");
 			}
 			else if (gC_ci->IsChinese())
 			{
 				g_pUserInformation->SetChinese();
-				printf("User language set to: Chinese\n");
+				SDLMAIN_LOG("User language set to: Chinese\n");
 			}
 			else if (gC_ci->IsJapanese())
 			{
 				g_pUserInformation->SetJapanese();
-				printf("User language set to: Japanese\n");
+				SDLMAIN_LOG("User language set to: Japanese\n");
 			}
 		}
 
 		//-----------------------------------------------------------------
 		// Initialize TopView
 		//-----------------------------------------------------------------
-		printf("Initializing TopView...\n");
+		SDLMAIN_LOG("Initializing TopView...\n");
 		if (!g_pTopView->IsInit())
 		{
-			printf("TopView not initialized, calling Init()...\n");
+			SDLMAIN_LOG("TopView not initialized, calling Init()...\n");
 			try {
 				g_pTopView->Init();
-				printf("TopView Init() completed\n");
+				SDLMAIN_LOG("TopView Init() completed\n");
 			} catch (NoSuchElementException& e) {
 				fprintf(stderr, "ERROR: NoSuchElementException in TopView::Init(): %s\n", e.toString().c_str());
 				// Continue anyway - some resources might be missing
@@ -423,7 +621,7 @@ int main(int argc, char* argv[])
 				// Continue anyway
 			}
 		}
-		printf("TopView initialization complete\n");
+		SDLMAIN_LOG("TopView initialization complete\n");
 
 		g_bActiveApp = TRUE;
 		CheckActivate(TRUE);
@@ -431,13 +629,11 @@ int main(int argc, char* argv[])
 		// Ensure window has focus for mouse input
 		SDL_RaiseWindow(g_pSDLWindow);
 
-		printf("\n");
-		printf("Starting game loop...\n");
-		printf("Press Ctrl+C or close window to exit.\n");
-		printf("\n");
-		fflush(stdout);
-		fprintf(stderr, "DEBUG: Entering game loop, g_bActiveApp = %d\n", g_bActiveApp);
-		fflush(stderr);
+		SDLMAIN_LOG("\n");
+		SDLMAIN_LOG("Starting game loop...\n");
+		SDLMAIN_LOG("Press Ctrl+C or close window to exit.\n");
+		SDLMAIN_LOG("\n");
+		SDLMAIN_DEBUG("DEBUG: Entering game loop, g_bActiveApp = %d\n", g_bActiveApp);
 
 		//-----------------------------------------------------------------
 		// Main game loop (from WinMain lines 4244-4341)
@@ -447,7 +643,7 @@ int main(int argc, char* argv[])
 		static int loopCount = 0;
 
 		// Frame rate tracking variables
-		g_StartTime = SDL_GetTicks();
+		g_StartTime = timeGetTime();
 		g_StartFrameCount = 0;
 		g_FrameCount = 0;
 
@@ -460,12 +656,19 @@ int main(int argc, char* argv[])
 			// Game update when active
 			if (g_bActiveApp)
 			{
-				g_CurrentTime = SDL_GetTicks();  // Replaces timeGetTime()
+				// Real system uptime (winmm timeGetTime, via Platform.h), matching
+				// CWaitPacketUpdate.cpp/GCUpdateInfoHandler.cpp's g_CurrentTime feed.
+				// Must NOT be SDL_GetTicks() (process uptime): CGameUpdate.cpp's
+				// anti-cheat check treats g_CurrentTime < 60000 as "suspicious",
+				// which SDL_GetTicks() satisfies for the first real minute of
+				// every single run, auto-quitting almost every session.
+				g_CurrentTime = timeGetTime();
 
-				// Clear the renderer to prevent trails/afterimages
-				// This is necessary because SDL_RenderPresent() doesn't guarantee
-				// the back buffer will be cleared between frames
-				SDL_RenderClear(g_pSDLRenderer);
+				// NOTE: no SDL_RenderClear() here - SDL_PresentGameBackBuffer()
+				// below (called unconditionally every active frame, see end of
+				// this block) always does a full-window SDL_RenderCopy of
+				// g_pBack, so clearing first was pure wasted GPU work: every
+				// pixel it touched got immediately overdrawn anyway.
 
 				// Game update (from WinMain lines 4275-4290)
 				if (g_pUpdate != NULL)
@@ -486,20 +689,7 @@ int main(int argc, char* argv[])
 				}
 
 				// Present back buffer to screen
-				// CRITICAL: First copy g_pLast to g_pBack (UI renders to g_pLast)
-				if (g_pLast != NULL && g_pBack != NULL) {
-					POINT origin = {0, 0};
-					g_pBack->Blt(&origin, g_pLast, NULL);  // Copy entire g_pLast to g_pBack
-				}
-
-				if (g_pBack != NULL) {
-					spritectl_surface_t backend_surface = g_pBack->GetBackendSurface();
-					if (backend_surface != SPRITECTL_INVALID_SURFACE) {
-						spritectl_present_surface(backend_surface, g_pSDLRenderer);
-					}
-				}
-
-				SDL_RenderPresent(g_pSDLRenderer);  // Replaces CSDLGraphics::Flip()
+				SDL_PresentGameBackBuffer();
 				g_FrameCount++;
 			}
 			else
@@ -516,26 +706,63 @@ int main(int argc, char* argv[])
 	}
 	catch (FileNotExistException& e) {
 		fprintf(stderr, "ERROR: FileNotExistException: %s\n", e.toString().c_str());
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "FATAL: FileNotExistException: %s\n", e.toString().c_str()); fclose(f); } }
 		return 1;
 	}
 	catch (Throwable& t) {
 		fprintf(stderr, "ERROR: Throwable: %s\n", t.toString().c_str());
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "FATAL: Throwable: %s\n", t.toString().c_str()); fclose(f); } }
+		return 1;
+	}
+	catch (SEHException& se) {
+		fprintf(stderr, "ERROR: structured exception code=0x%08X\n", se.m_code);
+		{
+			FILE* f = fopen("Log/ui_debug.log", "a");
+			if (f)
+			{
+				fprintf(f, "FATAL: structured exception code=0x%08X (0xC0000005=access violation)\n", se.m_code);
+				// Module base lets a later offline lookup (dumpbin /map,
+				// addr2line-style tooling against DarkEden.pdb) turn this
+				// into a source line - "access violation" alone isn't
+				// actionable, this at least pins down WHERE it happened.
+				HMODULE hSelf = GetModuleHandleA(NULL);
+				fprintf(f, "  exceptionAddress=0x%p moduleBase=0x%p offset=0x%p\n",
+					se.m_exceptionAddress, (void*)hSelf,
+					(void*)((char*)se.m_exceptionAddress - (char*)hSelf));
+				if (se.m_hasAccessInfo)
+				{
+					fprintf(f, "  accessType=%s faultAddress=0x%08lX\n",
+						se.m_accessType == 1 ? "write" : (se.m_accessType == 8 ? "execute(DEP)" : "read"),
+						se.m_faultAddress);
+				}
+				fprintf(f, "  callStack (offsets from moduleBase, resolve each against DarkEden.pdb):\n");
+				for (int i = 0; i < se.m_callStackCount; i++)
+				{
+					fprintf(f, "    [%d] 0x%p offset=0x%p\n", i,
+						(void*)se.m_callStack[i],
+						(void*)((char*)se.m_callStack[i] - (char*)hSelf));
+				}
+				fclose(f);
+			}
+		}
 		return 1;
 	}
 	catch (std::exception& e) {
 		fprintf(stderr, "ERROR: std::exception: %s\n", e.what());
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "FATAL: std::exception: %s\n", e.what()); fclose(f); } }
 		return 1;
 	}
 	catch (...) {
 		fprintf(stderr, "ERROR: Unknown exception\n");
+		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "FATAL: Unknown exception (non-standard, no message available)\n"); fclose(f); } }
 		return 1;
 	}
 
 	//-----------------------------------------------------------------
 	// Cleanup (from WinMain lines 4434-4446)
 	//-----------------------------------------------------------------
-	printf("\n");
-	printf("Shutting down...\n");
+	SDLMAIN_LOG("\n");
+	SDLMAIN_LOG("Shutting down...\n");
 
 	ReleaseAllObjects();
 
@@ -546,8 +773,8 @@ int main(int argc, char* argv[])
 	// Clean up SDL resources
 	CleanupSDL();
 
-	printf("Game exited cleanly.\n");
-	printf("Total frames rendered: %u\n", g_FrameCount);
+	SDLMAIN_LOG("Game exited cleanly.\n");
+	SDLMAIN_LOG("Total frames rendered: %u\n", g_FrameCount);
 
 	return 0;
 }

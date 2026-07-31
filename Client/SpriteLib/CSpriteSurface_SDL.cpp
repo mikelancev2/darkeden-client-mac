@@ -75,6 +75,12 @@ bool CSpriteSurface::Init(int width, int height)
 
 	m_width = width;
 	m_height = height;
+
+	/* Force black instead of relying on the backend to zero-init new
+	 * surfaces - a stray garbage/uncleared frame here is what shows up as
+	 * a brief flash on startup, before anything is blitted onto it. */
+	FillSurface(0);
+
 	return true;
 }
 

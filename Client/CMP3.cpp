@@ -1,10 +1,14 @@
 #include "DirectXlib_Pch.h"
 #include "Client_PCH.h"
 #ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#else
 #include <Windows.h>
+#endif
 #include "dxlib/CDirectSound.h"
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #include "DXLib/CDirectSound.h"
 #endif
 #include "CMP3.h"

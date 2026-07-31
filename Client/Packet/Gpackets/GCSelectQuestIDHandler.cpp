@@ -29,8 +29,8 @@ throw ( ProtocolException , Error )
 	
 	DEBUG_ADD("[GCSelectQuestIDHandler] Execute");
 	UI_RunQuestList( pPacket );
-	
-	g_pTempInformation->SetMode( TempInformation::MODE_SELECT_QUEST );	
+
+	g_pTempInformation->SetMode( TempInformation::MODE_SELECT_QUEST );
 	
 #endif
 

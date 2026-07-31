@@ -1,7 +1,7 @@
 
 #include <fstream>
 #include <strstream>
-#include "../../basic/Platform.h"
+#include <Platform.h>
 
 #include "bit_res.h"
 #include "huffman.h"

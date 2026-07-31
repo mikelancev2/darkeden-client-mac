@@ -7,10 +7,11 @@
 #include "u_window.h"
 #include <math.h>
 #include "vs_ui.h"
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(PLATFORM_USE_SDL)
 #include "CImm.h"
 #endif
 #include "UserOption.h"
+#include "../../../Client/Profiler.h"
 
 #define STATCH_VALUE 10
 #define HIDE_GAP	4
@@ -834,6 +835,7 @@ void WindowManager::Show()
 {
 	List::reverse_iterator itr;
 
+	__BEGIN_PROFILE("Show_WM_Normal")
 	itr = m_show_list.rbegin();
 	while (itr != m_show_list.rend())
 	{
@@ -842,19 +844,21 @@ void WindowManager::Show()
 
 		itr++;
 	}
+	__END_PROFILE("Show_WM_Normal")
 
 	// pinned Window�� no pinned Window ���� ���� ����Ѵ�.
+	__BEGIN_PROFILE("Show_WM_Pinned")
 	itr = m_show_list_pinned_window.rbegin();
 	while (itr != m_show_list_pinned_window.rend())
 	{
 		Window *pWindow = *itr;
-//		(*itr)->Show();
 		pWindow->Show();
-
 		itr++;
 	}
+	__END_PROFILE("Show_WM_Pinned")
 
 	// show topmost
+	__BEGIN_PROFILE("Show_WM_Topmost")
 	itr = m_show_list.rbegin();
 	while (itr != m_show_list.rend())
 	{
@@ -863,6 +867,7 @@ void WindowManager::Show()
 
 		itr++;
 	}
+	__END_PROFILE("Show_WM_Topmost")
 }
 
 //-----------------------------------------------------------------------------

@@ -617,11 +617,14 @@ void C_VS_UI_GAME::UnlockGear()
 //-----------------------------------------------------------------------------
 void C_VS_UI_GAME::ChangeToSlayerInterface()
 {
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: enter\n"); fclose(f); } }
 	CloseDescDialog();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: after CloseDescDialog\n"); fclose(f); } }
 
 	CloseInfo();
 	DeleteNew(m_pC_info);
 	DeleteNew(m_pC_other_info);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: after CloseInfo/DeleteNew\n"); fclose(f); } }
 
 //	CloseSkillView();
 //	DeleteNew(m_pC_skill_view);
@@ -634,18 +637,21 @@ void C_VS_UI_GAME::ChangeToSlayerInterface()
 	DeleteNew(m_pC_tribe_interface);
 
 	// change skin data
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: before FreeAssemble/LoadAssemble\n"); fclose(f); } }
 	gpC_global_resource->FreeAssemble();
 	gpC_global_resource->LoadAssemble();
-	
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: after LoadAssemble, before new C_VS_UI_SLAYER\n"); fclose(f); } }
+
 	m_pC_tribe_interface = new C_VS_UI_SLAYER;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: after new C_VS_UI_SLAYER, before .set file load\n"); fclose(f); } }
 
 	char sz_filename[512],sz_filename2[512],sz_filename3[512];
 	wsprintf(sz_filename, "UserSet\\%s.set", g_char_slot_ingame.sz_name.c_str());
 	wsprintf(sz_filename2,"UserSet\\%s-%d.set", g_char_slot_ingame.sz_name.c_str(),g_pUserInformation->WorldID);
 	wsprintf(sz_filename3,"UserSet\\%s-%d-%d.set", g_char_slot_ingame.sz_name.c_str(),g_Dimension,g_pUserInformation->WorldID);
-		
+
 	ifstream file(sz_filename3, ios::binary);
-	
+
 	if(file.is_open())
 	{
 		gpC_vs_ui_window_manager->LoadFromFile(file);
@@ -669,13 +675,17 @@ void C_VS_UI_GAME::ChangeToSlayerInterface()
 			}
 		}
 	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: after .set file load, before TribeChanged\n"); fclose(f); } }
 
 	m_pC_hotkey = m_pC_tribe_interface;
 	m_pC_chatting->TribeChanged();
 	m_pC_tribe_interface->SetChattingInterface(m_pC_chatting);
-	
-	m_pC_tribe_interface->Start();	
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: before m_pC_tribe_interface->Start()\n"); fclose(f); } }
+
+	m_pC_tribe_interface->Start();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: after tribe Start(), before new C_VS_UI_INFO\n"); fclose(f); } }
 	m_pC_info = new C_VS_UI_INFO;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "ChangeToSlayerInterface: end reached OK\n"); fclose(f); } }
 }
 
 //-----------------------------------------------------------------------------
@@ -4651,7 +4661,9 @@ void C_VS_UI_GAME::Start()
 		DeleteNew(m_pC_chatting);
 		m_pC_chatting = NULL;
 	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: before new C_VS_UI_CHATTING\n"); fclose(f); } }
 	m_pC_chatting = new C_VS_UI_CHATTING;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: after C_VS_UI_CHATTING, before mailbox\n"); fclose(f); } }
 
 	if(m_pC_mailbox != NULL)
 	{
@@ -4659,11 +4671,13 @@ void C_VS_UI_GAME::Start()
 		m_pC_mailbox = NULL;
 	}
 	m_pC_mailbox = new C_VS_UI_MAILBOX;
-	
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: after new C_VS_UI_MAILBOX, before LoadFromFile\n"); fclose(f); } }
+
 	MString mailFileName;
 	mailFileName.Format("UserSet\\%s-%d-%d.mail", g_char_slot_ingame.sz_name.c_str(),g_Dimension,g_pUserInformation->WorldID);
 
 	m_pC_mailbox->LoadFromFile(mailFileName.GetString());
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: after mailbox LoadFromFile, before TestServer read\n"); fclose(f); } }
 
 	bool IsTestServer = false;
 	ifstream IsTestServerFile(FILE_INFO_TESTSERVER, ios::binary);
@@ -4672,7 +4686,7 @@ void C_VS_UI_GAME::Start()
 	g_pUserInformation->IsTestServer = IsTestServer;
 //	for(int zone = 0; zone < zoneNum; zone++)
 
-	
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: before race interface switch, g_eRaceInterface=%d\n", (int)g_eRaceInterface); fclose(f); } }
 	// default: Slayer interface
 	switch(g_eRaceInterface)
 	{
@@ -4685,16 +4699,20 @@ void C_VS_UI_GAME::Start()
 		break;
 
 	case RACE_OUSTERS:
-		ChangeToOustersInterface();		
-	}	
+		ChangeToOustersInterface();
+	}
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: after race interface switch, before Inventory Init\n"); fclose(f); } }
 
 	// Client ���� Inventory data structure.
 	g_pInventory->Init(C_VS_UI_INVENTORY::GRID_X, C_VS_UI_INVENTORY::GRID_Y);
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: after Inventory Init, before gear Init\n"); fclose(f); } }
 	g_pSlayerGear->Init();
 	g_pVampireGear->Init();
 	g_pOustersGear->Init();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: after gear Init, before descriptor_manager.Unset\n"); fclose(f); } }
 
 	g_descriptor_manager.Unset();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI_GAME::Start: end reached OK\n"); fclose(f); } }
 //	MHelpMessageManager::Instance().LoadHelpMessageRpk("helpmessage.txt");
 }
 

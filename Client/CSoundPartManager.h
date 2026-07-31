@@ -10,7 +10,7 @@
 #ifdef PLATFORM_WINDOWS
 #include <DSound.h>
 #else
-#include "../../basic/Platform.h"
+#include <Platform.h>
 
 // Forward declaration for DirectSound buffer
 typedef struct IDirectSoundBuffer* LPDIRECTSOUNDBUFFER;

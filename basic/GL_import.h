@@ -27,6 +27,15 @@ DllImport void (*CkBltz)(const S_SURFACEINFO *,
 #ifdef PLATFORM_WINDOWS
 DllImport void	SetSurfaceInfo(S_SURFACEINFO *surface_info, const DDSURFACEDESC2 *p_ddsd);
 DllImport void	SetSurfaceInfo(S_SURFACEINFO *surface_info, const DDSURFACEDESC *p_ddsd);
+#else
+static inline void SetSurfaceInfo(S_SURFACEINFO* dest, const S_SURFACEINFO* src) {
+	if (dest && src) {
+		dest->p_surface = src->p_surface;
+		dest->width = src->width;
+		dest->height = src->height;
+		dest->pitch = src->pitch;
+	}
+}
 #endif
 DllImport void	SetSurfaceInfo(S_SURFACEINFO &surface_info, void *p_surface, int w, int h, int pitch=0);
 DllImport void	SetRect(S_RECT &rect, int x, int y, int w, int h);

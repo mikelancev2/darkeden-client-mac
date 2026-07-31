@@ -445,7 +445,6 @@ CIndexSprite::CIndexSprite()
 	m_bInit		= false;
 
 #ifdef SPRITELIB_BACKEND_SDL
-	m_backend_sprite = SPRITECTL_INVALID_SPRITE;
 	m_backend_dirty = false;
 #endif
 }
@@ -468,11 +467,8 @@ void
 CIndexSprite::Release()
 {
 #ifdef SPRITELIB_BACKEND_SDL
-	if (m_backend_sprite != SPRITECTL_INVALID_SPRITE) {
-		spritectl_destroy_sprite(m_backend_sprite);
-		m_backend_sprite = SPRITECTL_INVALID_SPRITE;
-		m_backend_dirty = false;
-	}
+	ClearBackendCache();
+	m_backend_dirty = false;
 #endif
 	if (m_Pixels!=NULL)
 	{

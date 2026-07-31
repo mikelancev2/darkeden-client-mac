@@ -1,5 +1,5 @@
 #include "DirectXlib_PCH.h"
-#include "../basic/Platform.h"
+#include <Platform.h>
 #include <memory.h>
 #include "soundbuf.h"
 #include "mp3.h"

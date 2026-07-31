@@ -71,9 +71,13 @@
 #define	__CPARTMANAGER_H__
 
 #ifdef PLATFORM_WINDOWS
-#include <Windows.h>
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-#include "../../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+#include <Platform.h>
 #endif
 #include <list>
 #include "DebugInfo.h"
@@ -82,7 +86,7 @@ template <class IndexType, class PartIndexType, class DataType>
 class CPartManager {
 	public :
 		typedef	std::list<PartIndexType>	PARTINDEX_LIST;				// PartIndex의 ID
-		typedef	PARTINDEX_LIST::iterator	PARTINDEX_LIST_ITERATOR;
+		typedef	typename PARTINDEX_LIST::iterator	PARTINDEX_LIST_ITERATOR;
 		
 	public :
 		CPartManager();

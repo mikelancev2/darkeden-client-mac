@@ -27,8 +27,11 @@ bool								CSDLGraphics::m_b3D					= true;
 bool								CSDLGraphics::m_bMMX					= false;
 bool								CSDLGraphics::m_bGammaControl		= false;
 DDGAMMARAMP						CSDLGraphics::m_DDGammaRamp;
-WORD								CSDLGraphics::m_GammaStep				= 0;
+WORD								CSDLGraphics::m_GammaStep				= 100;
 WORD								CSDLGraphics::m_AddGammaStep[3];
+
+uint8_t								CSDLGraphics::m_GammaLUT[3][256];
+bool								CSDLGraphics::m_bGammaNeutral			= true;
 
 RECT								CSDLGraphics::m_rcWindow;
 RECT								CSDLGraphics::m_rcScreen;
@@ -151,4 +154,129 @@ DWORD CSDLGraphics::Get_BPP()
 {
 	// SDL2 typically uses 16-bit color
 	return 16;
+}
+
+// Packs 8-bit RGB into RGB565, rounding to the nearest 5/6-bit level
+// instead of truncating (matches SpriteLib's spritectl_rgb_to_565 - not
+// shared directly since SpriteLibBackendSDL.h is only usable from the
+// SpriteLib backend translation unit).
+static inline uint16_t GammaPackRGB565(uint8_t r, uint8_t g, uint8_t b)
+{
+	uint16_t r5 = (uint16_t)((r + 4) >> 3);
+	uint16_t g6 = (uint16_t)((g + 2) >> 2);
+	uint16_t b5 = (uint16_t)((b + 4) >> 3);
+	if (r5 > 0x1F) r5 = 0x1F;
+	if (g6 > 0x3F) g6 = 0x3F;
+	if (b5 > 0x1F) b5 = 0x1F;
+	return (uint16_t)((r5 << 11) | (g6 << 5) | b5);
+}
+
+//-----------------------------------------------------------------------------
+// Software gamma/brightness control
+//
+// The original DirectDraw client drove a real hardware DDGAMMARAMP: it read
+// the driver's baseline (linear/identity) ramp once, then per-channel
+// lerped it toward black (step<100) or white (step>100), applied by the
+// GPU at scanout for free. There is no equivalent hardware ramp under
+// SDL2, so this rebuilds the same lerp math as an 8-bit LUT and applies it
+// in software, once per frame, to the backbuffer pixels right before they
+// go to the GPU (see ApplyGammaToBuffer / spritectl_present_surface).
+//-----------------------------------------------------------------------------
+void CSDLGraphics::RebuildGammaLUT()
+{
+	bool neutral = true;
+
+	for (int ch = 0; ch < 3; ch++) {
+		int addGammaStep = (int)(short)m_AddGammaStep[ch];
+		if (addGammaStep > 100) addGammaStep = 100;
+		if (addGammaStep < -100) addGammaStep = -100;
+
+		int step;
+		if (addGammaStep > 0) {
+			step = m_GammaStep + (200 - (int)m_GammaStep) * addGammaStep / 100;
+		} else {
+			step = m_GammaStep + (int)m_GammaStep * addGammaStep / 100;
+		}
+
+		int maxValue, stepValue;
+		if (step < 100) {
+			maxValue = 0;
+			stepValue = 100 - step;
+		} else {
+			maxValue = 255;
+			stepValue = step - 100;
+		}
+
+		if (stepValue != 0) {
+			neutral = false;
+		}
+
+		for (int v = 0; v < 256; v++) {
+			int out = v + (maxValue - v) * stepValue / 100;
+			if (out < 0) out = 0;
+			if (out > 255) out = 255;
+			m_GammaLUT[ch][v] = (uint8_t)out;
+		}
+	}
+
+	m_bGammaNeutral = neutral;
+}
+
+// step: 50 (dark) ~ 100 (normal, default) ~ 150 (bright). 0xffff re-applies
+// the last step set (used to refresh after an add-gamma tint changes).
+void CSDLGraphics::SetGammaRamp(WORD step)
+{
+	if (step == (WORD)-1)
+		step = m_GammaStep;
+	else
+		m_GammaStep = step;
+
+	RebuildGammaLUT();
+}
+
+void CSDLGraphics::RestoreGammaRamp()
+{
+	m_GammaStep = 100;
+	m_AddGammaStep[0] = m_AddGammaStep[1] = m_AddGammaStep[2] = 0;
+	RebuildGammaLUT();
+}
+
+// Per-channel additive screen tint on top of the base gamma step - used by
+// MEventManager for server-driven EVENTFLAG_FADE_SCREEN effects. Called
+// with no args to clear the tint back to neutral.
+void CSDLGraphics::SetAddGammaRamp(WORD rStep, WORD gStep, WORD bStep)
+{
+	m_AddGammaStep[0] = rStep;
+	m_AddGammaStep[1] = gStep;
+	m_AddGammaStep[2] = bStep;
+
+	RebuildGammaLUT();
+}
+
+void CSDLGraphics::ApplyGammaToBuffer(uint16_t* pixels, int width, int height, int pitchBytes)
+{
+	if (m_bGammaNeutral || pixels == NULL || width <= 0 || height <= 0) {
+		return;
+	}
+
+	const uint8_t* lutR = m_GammaLUT[0];
+	const uint8_t* lutG = m_GammaLUT[1];
+	const uint8_t* lutB = m_GammaLUT[2];
+
+	uint8_t* rowBytes = (uint8_t*)pixels;
+	for (int y = 0; y < height; y++) {
+		uint16_t* row = (uint16_t*)(rowBytes + (size_t)y * pitchBytes);
+		for (int x = 0; x < width; x++) {
+			uint16_t pixel = row[x];
+			uint8_t r5 = (pixel >> 11) & 0x1F;
+			uint8_t g6 = (pixel >> 5) & 0x3F;
+			uint8_t b5 = pixel & 0x1F;
+
+			uint8_t r8 = (r5 << 3) | (r5 >> 2);
+			uint8_t g8 = (g6 << 2) | (g6 >> 4);
+			uint8_t b8 = (b5 << 3) | (b5 >> 2);
+
+			row[x] = GammaPackRGB565(lutR[r8], lutG[g8], lutB[b8]);
+		}
+	}
 }

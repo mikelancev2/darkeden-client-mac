@@ -7,7 +7,7 @@
 #include "bit_res.h"
 
 /* Platform-independent includes (SDL2 backend on all platforms) */
-#include "../../basic/Platform.h"
+#include <Platform.h>
 #include "../../basic/AudioTypes.h"
 
 typedef int	OFFSET ;

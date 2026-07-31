@@ -16,9 +16,13 @@
 #define	__CPOSITIONLIST_H__
 
 #ifdef PLATFORM_WINDOWS
-#include <Windows.h>
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
 #else
-#include "../../basic/Platform.h"
+#include <Windows.h>
+#endif
+#else
+#include <Platform.h>
 #endif
 #include <list>
 //#include <fstream.h>
@@ -104,7 +108,7 @@ class CPositionList {
 		// Get 
 		//--------------------------------------------------------------
 		int								GetSize() const		{ return m_listPosition.size(); }
-		POSITION_LIST::const_iterator	GetIterator() const	{ return m_listPosition.begin(); }
+		typename POSITION_LIST::const_iterator	GetIterator() const	{ return m_listPosition.begin(); }
 
 
 		//--------------------------------------------------------------

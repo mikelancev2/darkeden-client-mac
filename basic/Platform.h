@@ -11,14 +11,40 @@
 
 -----------------------------------------------------------------------------*/
 
-#ifndef __PLATFORM_H__
-#define __PLATFORM_H__
+#ifndef __DARKEDEN_CLIENT_PLATFORM_H__
+#define __DARKEDEN_CLIENT_PLATFORM_H__
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <stdlib.h>
 
 #ifdef __cplusplus
-extern "C" {
+#include <type_traits>
+#include <vector>
+#include <list>
+#include <map>
+
+template <typename A, typename B>
+static inline typename std::common_type<A, B>::type platform_max_compat(A a, B b) {
+	typedef typename std::common_type<A, B>::type R;
+	return (static_cast<R>(a) > static_cast<R>(b)) ? static_cast<R>(a) : static_cast<R>(b);
+}
+
+template <typename A, typename B>
+static inline typename std::common_type<A, B>::type platform_min_compat(A a, B b) {
+	typedef typename std::common_type<A, B>::type R;
+	return (static_cast<R>(a) < static_cast<R>(b)) ? static_cast<R>(a) : static_cast<R>(b);
+}
+
+#ifndef max
+#define max(a, b) platform_max_compat((a), (b))
+#endif
+#ifndef min
+#define min(a, b) platform_min_compat((a), (b))
+#endif
 #endif
 
 /* Define assert macro for non-Windows platforms */
@@ -34,7 +60,10 @@ extern "C" {
 
 /* Detect platform */
 #if defined(_WIN32) || defined(_WIN64)
-	#define PLATFORM_WINDOWS
+	#define PLATFORM_WIN32_HOST
+	#ifndef PLATFORM_USE_SDL
+		#define PLATFORM_WINDOWS
+	#endif
 #elif defined(__linux__)
 	#define PLATFORM_LINUX
 #elif defined(__APPLE__)
@@ -74,8 +103,9 @@ extern "C" {
  * Calling Conventions
  * ============================================================================ */
 
-/* Define calling conventions for non-Windows platforms */
-#ifndef PLATFORM_WINDOWS
+/* Define calling conventions only for true non-Windows compilers.
+   MSVC needs __cdecl/__stdcall intact even when the SDL backend is selected. */
+#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_WIN32_HOST)
 	#ifndef __cdecl
 		#define __cdecl
 	#endif
@@ -103,6 +133,19 @@ extern "C" {
 #ifndef NULL
 	#define NULL 0
 #endif
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
+#endif
+
+#ifndef IN
+#define IN
+#endif
+#ifndef OUT
+#define OUT
+#endif
 
 #define NOT_SELECTED						-1
 
@@ -117,17 +160,1396 @@ typedef uint64_t		DWORD64;
 typedef uint64_t		ULONGLONG;
 typedef int64_t			LONGLONG;
 typedef void*			PVOID;
+typedef void*			LPVOID;
 typedef void*			ADDRESS_MODE;
 typedef uintptr_t		ULONG_PTR;
 typedef intptr_t		LONG_PTR;
 typedef uintptr_t		DWORD_PTR;
 typedef int32_t			LONG;
 typedef int				BOOL;
+typedef const char*		LPCSTR;
+typedef char*			LPSTR;
+typedef const char*		LPCTSTR;
+typedef char*			LPTSTR;
+typedef void			VOID;
+typedef int32_t			HRESULT;
+typedef intptr_t		LRESULT;
+typedef uintptr_t		UINT_PTR;
+typedef intptr_t		LPARAM;
+typedef intptr_t		WPARAM;
+typedef void*			HWND;
+typedef void*			HDC;
+typedef void*			HFONT;
+typedef void*			HINSTANCE;
+typedef void*			HANDLE;
+typedef void*			HMODULE;
+typedef void*			HMENU;
+typedef void*			HBRUSH;
+typedef void*			HICON;
+typedef void*			HCURSOR;
+typedef void*			HINTERNET;
+typedef DWORD*			LPDWORD;
+typedef unsigned char*	LPBYTE;
+typedef const wchar_t*	LPCWSTR;
+typedef wchar_t*		LPWSTR;
+
+#ifndef PLATFORM_TCHAR_COMPAT_DEFINED
+#define PLATFORM_TCHAR_COMPAT_DEFINED
+typedef char			TCHAR;
+typedef char			_TCHAR;
+#endif
+
+#ifndef _T
+#define _T(x) x
+#endif
+#ifndef TEXT
+#define TEXT(x) x
+#endif
+#ifndef _stscanf
+#define _stscanf sscanf
+#endif
+
+#if defined(PLATFORM_USE_SDL) && defined(PLATFORM_WIN32_HOST)
+#ifndef PLATFORM_WIN32_SDL_MESSAGE_COMPAT_DEFINED
+#define PLATFORM_WIN32_SDL_MESSAGE_COMPAT_DEFINED
+#ifndef S_OK
+#define S_OK 0
+#endif
+#ifndef S_FALSE
+#define S_FALSE 1
+#endif
+#ifndef SUCCEEDED
+#define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
+#endif
+#ifndef FAILED
+#define FAILED(hr) (((HRESULT)(hr)) < 0)
+#endif
+#ifndef MB_OK
+#define MB_OK 0x00000000L
+#endif
+#ifndef WM_USER
+#define WM_USER 0x0400
+#endif
+#ifndef WM_TIMER
+#define WM_TIMER 0x0113
+#endif
+#ifndef WM_CHAR
+#define WM_CHAR 0x0102
+#endif
+#ifndef WM_KEYDOWN
+#define WM_KEYDOWN 0x0100
+#endif
+#ifndef WM_KEYUP
+#define WM_KEYUP 0x0101
+#endif
+#ifndef WM_DESTROY
+#define WM_DESTROY 0x0002
+#endif
+#ifndef WM_CLOSE
+#define WM_CLOSE 0x0010
+#endif
+#ifndef WM_QUIT
+#define WM_QUIT 0x0012
+#endif
+#ifndef WM_SYSCOMMAND
+#define WM_SYSCOMMAND 0x0112
+#endif
+#ifndef WM_MOVE
+#define WM_MOVE 0x0003
+#endif
+#ifndef WM_GETMINMAXINFO
+#define WM_GETMINMAXINFO 0x0024
+#endif
+#ifndef WM_ACTIVATEAPP
+#define WM_ACTIVATEAPP 0x001C
+#endif
+#ifndef WM_IME_COMPOSITION
+#define WM_IME_COMPOSITION 0x010F
+#endif
+#ifndef WM_IME_STARTCOMPOSITION
+#define WM_IME_STARTCOMPOSITION 0x010D
+#endif
+#ifndef WM_IME_ENDCOMPOSITION
+#define WM_IME_ENDCOMPOSITION 0x010E
+#endif
+#ifndef MM_MCINOTIFY
+#define MM_MCINOTIFY 0x3D9
+#endif
+#ifndef MCI_NOTIFY_SUCCESSFUL
+#define MCI_NOTIFY_SUCCESSFUL 0x0001
+#endif
+#ifndef SC_HOTKEY
+#define SC_HOTKEY 0xF150
+#endif
+#ifndef SC_KEYMENU
+#define SC_KEYMENU 0xF100
+#endif
+#ifndef SC_TASKLIST
+#define SC_TASKLIST 0xF140
+#endif
+#ifndef SC_PREVWINDOW
+#define SC_PREVWINDOW 0xF050
+#endif
+#ifndef SC_NEXTWINDOW
+#define SC_NEXTWINDOW 0xF040
+#endif
+#ifndef SC_CLOSE
+#define SC_CLOSE 0xF060
+#endif
+#ifndef SC_MOVE
+#define SC_MOVE 0xF010
+#endif
+#ifndef SC_SIZE
+#define SC_SIZE 0xF000
+#endif
+#ifndef SC_MAXIMIZE
+#define SC_MAXIMIZE 0xF030
+#endif
+#ifndef SC_MONITORPOWER
+#define SC_MONITORPOWER 0xF170
+#endif
+#ifndef VK_SCROLL
+#define VK_SCROLL 0x91
+#endif
+#ifndef CP_UTF8
+#define CP_UTF8 65001
+#endif
+#ifndef CP_OEMCP
+#define CP_OEMCP 1
+#endif
+#ifndef WC_COMPOSITECHECK
+#define WC_COMPOSITECHECK 0x00000200
+#endif
+#ifndef PM_NOREMOVE
+#define PM_NOREMOVE 0x0000
+#endif
+#ifndef SM_CXSIZEFRAME
+#define SM_CXSIZEFRAME 32
+#endif
+#ifndef SM_CYSIZEFRAME
+#define SM_CYSIZEFRAME 33
+#endif
+#ifndef SM_CYMENU
+#define SM_CYMENU 15
+#endif
+#ifndef __builtin_expect
+#define __builtin_expect(expr, expected) (expr)
+#endif
+#ifndef MAKEINTRESOURCE
+#define MAKEINTRESOURCE(i) ((LPCTSTR)((DWORD_PTR)((WORD)(i))))
+#endif
+#ifndef IDC_ARROW
+#define IDC_ARROW ((LPCTSTR)"MAKEINTRESOURCE(32512)")
+#endif
+#ifndef BLACK_BRUSH
+#define BLACK_BRUSH 4
+#endif
+#ifndef CS_HREDRAW
+#define CS_HREDRAW 0x0001
+#endif
+#ifndef CS_VREDRAW
+#define CS_VREDRAW 0x0002
+#endif
+#ifndef CS_DBLCLKS
+#define CS_DBLCLKS 0x0008
+#endif
+#ifndef WS_EX_APPWINDOW
+#define WS_EX_APPWINDOW 0x00040000L
+#endif
+#ifndef WS_POPUP
+#define WS_POPUP 0x80000000L
+#endif
+#ifndef WS_OVERLAPPED
+#define WS_OVERLAPPED 0x00000000L
+#endif
+#ifndef WS_CLIPCHILDREN
+#define WS_CLIPCHILDREN 0x02000000L
+#endif
+#ifndef WS_THICKFRAME
+#define WS_THICKFRAME 0x00040000L
+#endif
+#ifndef WS_MINIMIZEBOX
+#define WS_MINIMIZEBOX 0x00020000L
+#endif
+#ifndef WS_SYSMENU
+#define WS_SYSMENU 0x00080000L
+#endif
+#ifndef ENUM_CURRENT_SETTINGS
+#define ENUM_CURRENT_SETTINGS ((DWORD)-1)
+#endif
+#ifndef CDS_RESET
+#define CDS_RESET 0x40000000
+#endif
+#ifndef PROCESS_ALL_ACCESS
+#define PROCESS_ALL_ACCESS 0x001F0FFF
+#endif
+#ifndef TH32CS_SNAPPROCESS
+#define TH32CS_SNAPPROCESS 0x00000002
+#endif
+#ifndef INVALID_HANDLE_VALUE
+#define INVALID_HANDLE_VALUE ((HANDLE)-1)
+#endif
+#ifndef INTERNET_OPEN_TYPE_PRECONFIG
+#define INTERNET_OPEN_TYPE_PRECONFIG 0
+#endif
+#ifndef INTERNET_FLAG_RESYNCHRONIZE
+#define INTERNET_FLAG_RESYNCHRONIZE 0x00000800
+#endif
+#ifndef INTERNET_OPTION_DATAFILE_NAME
+#define INTERNET_OPTION_DATAFILE_NAME 33
+#endif
+#ifndef SPI_SETSCREENSAVERRUNNING
+#define SPI_SETSCREENSAVERRUNNING 97
+#endif
+#ifndef VER_PLATFORM_WIN32_WINDOWS
+#define VER_PLATFORM_WIN32_WINDOWS 1
+#endif
+#ifndef VER_PLATFORM_WIN32_NT
+#define VER_PLATFORM_WIN32_NT 2
+#endif
+#ifndef STILL_ACTIVE
+#define STILL_ACTIVE ((DWORD)-1)
+#endif
+#ifndef THREAD_PRIORITY_NORMAL
+#define THREAD_PRIORITY_NORMAL 0
+#endif
+#ifndef THREAD_PRIORITY_LOWEST
+#define THREAD_PRIORITY_LOWEST -2
+#endif
+#ifndef IWebBrowser2_DEFINED
+#define IWebBrowser2_DEFINED
+typedef void* IWebBrowser2;
+#endif
+typedef long (__cdecl *WNDPROC)(void*, unsigned int, unsigned long, long long);
+typedef struct tagWNDCLASS {
+	UINT style;
+	void* lpfnWndProc;
+	int cbClsExtra;
+	int cbWndExtra;
+	HINSTANCE hInstance;
+	HICON hIcon;
+	HCURSOR hCursor;
+	HBRUSH hbrBackground;
+	LPCTSTR lpszMenuName;
+	LPCTSTR lpszClassName;
+} WNDCLASS, *PWNDCLASS, *LPWNDCLASS;
+typedef struct tagPOINT {
+	LONG x;
+	LONG y;
+} POINT, *PPOINT, *LPPOINT;
+#ifndef POINT_DEFINED
+#define POINT_DEFINED
+#endif
+typedef struct tagMINMAXINFO {
+	POINT ptReserved;
+	POINT ptMaxSize;
+	POINT ptMaxPosition;
+	POINT ptMinTrackSize;
+	POINT ptMaxTrackSize;
+} MINMAXINFO, *PMINMAXINFO, *LPMINMAXINFO;
+typedef struct _devicemode {
+	char dmDeviceName[32];
+	WORD dmSpecVersion;
+	WORD dmDriverVersion;
+	WORD dmSize;
+	WORD dmDriverExtra;
+	DWORD dmFields;
+	LONG dmPositionX;
+	LONG dmPositionY;
+	DWORD dmDisplayOrientation;
+	DWORD dmDisplayFixedOutput;
+	short dmColor;
+	short dmDuplex;
+	short dmYResolution;
+	short dmTTOption;
+	short dmCollate;
+	char dmFormName[32];
+	WORD dmLogPixels;
+	DWORD dmBitsPerPel;
+	DWORD dmPelsWidth;
+	DWORD dmPelsHeight;
+	DWORD dmDisplayFlags;
+	DWORD dmDisplayFrequency;
+} DEVMODE, *PDEVMODE, *LPDEVMODE;
+typedef struct _SECURITY_ATTRIBUTES {
+	DWORD nLength;
+	LPVOID lpSecurityDescriptor;
+	BOOL bInheritHandle;
+} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+typedef struct tagMSG {
+	HWND hwnd;
+	UINT message;
+	WPARAM wParam;
+	LPARAM lParam;
+	DWORD time;
+	POINT pt;
+} MSG, *PMSG, *LPMSG;
+typedef struct _OSVERSIONINFO {
+	DWORD dwOSVersionInfoSize;
+	DWORD dwMajorVersion;
+	DWORD dwMinorVersion;
+	DWORD dwBuildNumber;
+	DWORD dwPlatformId;
+	char szCSDVersion[128];
+} OSVERSIONINFO, *POSVERSIONINFO, *LPOSVERSIONINFO;
+typedef struct tagPROCESSENTRY32 {
+	DWORD dwSize;
+	DWORD cntUsage;
+	DWORD th32ProcessID;
+	ULONG_PTR th32DefaultHeapID;
+	DWORD th32ModuleID;
+	DWORD cntThreads;
+	DWORD th32ParentProcessID;
+	LONG pcPriClassBase;
+	DWORD dwFlags;
+	char szExeFile[260];
+} PROCESSENTRY32, *PPROCESSENTRY32, *LPPROCESSENTRY32;
+typedef LONG (__stdcall *LPTOP_LEVEL_EXCEPTION_FILTER)(struct _EXCEPTION_POINTERS*);
+static inline LRESULT DefWindowProc(void* hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
+	(void)hWnd; (void)Msg; (void)wParam; (void)lParam;
+	return 0;
+}
+static inline void PostQuitMessage(int nExitCode) {
+	(void)nExitCode;
+}
+static inline HICON LoadIcon(HINSTANCE hInstance, LPCTSTR lpIconName) {
+	(void)hInstance; (void)lpIconName;
+	return NULL;
+}
+static inline HCURSOR LoadCursor(HINSTANCE hInstance, LPCTSTR lpCursorName) {
+	(void)hInstance; (void)lpCursorName;
+	return NULL;
+}
+static inline HBRUSH GetStockObject(int fnObject) {
+	(void)fnObject;
+	return NULL;
+}
+static inline int RegisterClass(const WNDCLASS* lpWndClass) {
+	(void)lpWndClass;
+	return 1;
+}
+static inline void SetCursor(HCURSOR hCursor) {
+	(void)hCursor;
+}
+static inline BOOL UpdateWindow(HWND hWnd) {
+	(void)hWnd;
+	return TRUE;
+}
+static inline HWND SetFocus(HWND hWnd) {
+	return hWnd;
+}
+static inline BOOL EnumDisplaySettings(LPCTSTR lpszDeviceName, DWORD iModeNum, DEVMODE* lpDevMode) {
+	(void)lpszDeviceName; (void)iModeNum;
+	if (lpDevMode != NULL) {
+		lpDevMode->dmPelsWidth = 1024;
+		lpDevMode->dmPelsHeight = 768;
+		lpDevMode->dmBitsPerPel = 16;
+		lpDevMode->dmDisplayFrequency = 60;
+	}
+	return TRUE;
+}
+static inline LONG ChangeDisplaySettings(DEVMODE* lpDevMode, DWORD dwFlags) {
+	(void)lpDevMode; (void)dwFlags;
+	return 0;
+}
+static inline HANDLE CreateMutex(SECURITY_ATTRIBUTES* lpMutexAttributes, BOOL bInitialOwner, LPCTSTR lpName) {
+	(void)lpMutexAttributes; (void)bInitialOwner; (void)lpName;
+	return (HANDLE)1;
+}
+static inline BOOL ReleaseMutex(HANDLE hMutex) {
+	(void)hMutex;
+	return TRUE;
+}
+static inline HWND FindWindow(LPCTSTR lpClassName, LPCTSTR lpWindowName) {
+	(void)lpClassName; (void)lpWindowName;
+	return NULL;
+}
+static inline DWORD GetModuleFileName(HMODULE hModule, LPSTR lpFilename, DWORD nSize) {
+	(void)hModule;
+	if (lpFilename != NULL && nSize > 0) {
+		const char* name = "DarkEden.exe";
+		size_t len = strlen(name);
+		if (len >= nSize) len = nSize - 1;
+		memcpy(lpFilename, name, len);
+		lpFilename[len] = '\0';
+		return (DWORD)len;
+	}
+	return 0;
+}
+static inline BOOL SetCurrentDirectory(LPCTSTR lpPathName) {
+	(void)lpPathName;
+	return TRUE;
+}
+static inline DWORD GetWindowThreadProcessId(HWND hWnd, LPDWORD lpdwProcessId) {
+	(void)hWnd;
+	if (lpdwProcessId != NULL) *lpdwProcessId = 0;
+	return 0;
+}
+static inline HANDLE OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId) {
+	(void)dwDesiredAccess; (void)bInheritHandle; (void)dwProcessId;
+	return NULL;
+}
+static inline BOOL TerminateProcess(HANDLE hProcess, UINT uExitCode) {
+	(void)hProcess; (void)uExitCode;
+	return FALSE;
+}
+static inline void Sleep(DWORD dwMilliseconds) {
+	SDL_Delay(dwMilliseconds);
+}
+static inline BOOL TerminateThread(HANDLE thread, DWORD exitCode) {
+	(void)thread; (void)exitCode; return TRUE;
+}
+static inline BOOL GetExitCodeThread(HANDLE thread, LPDWORD lpExitCode) {
+	(void)thread; if (lpExitCode) *lpExitCode = STILL_ACTIVE; return TRUE;
+}
+static inline HANDLE GetCurrentThread(void) {
+	return NULL;
+}
+#ifndef PLATFORM_SET_THREAD_PRIORITY_DEFINED
+#define PLATFORM_SET_THREAD_PRIORITY_DEFINED
+static inline BOOL SetThreadPriority(HANDLE thread, int priority) {
+	(void)thread; (void)priority; return TRUE;
+}
+#endif
+static inline BOOL DeleteFile(LPCTSTR lpFileName) {
+	return (remove(lpFileName) == 0) ? TRUE : FALSE;
+}
+static inline BOOL CopyFile(LPCTSTR lpExistingFileName, LPCTSTR lpNewFileName, BOOL bFailIfExists) {
+	(void)bFailIfExists;
+	FILE* src = fopen(lpExistingFileName, "rb");
+	if (src == NULL) return FALSE;
+	FILE* dst = fopen(lpNewFileName, "wb");
+	if (dst == NULL) {
+		fclose(src);
+		return FALSE;
+	}
+	char buffer[8192];
+	size_t n;
+	while ((n = fread(buffer, 1, sizeof(buffer), src)) > 0) {
+		fwrite(buffer, 1, n, dst);
+	}
+	fclose(src);
+	fclose(dst);
+	return TRUE;
+}
+static inline LPTOP_LEVEL_EXCEPTION_FILTER SetUnhandledExceptionFilter(LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter) {
+	(void)lpTopLevelExceptionFilter;
+	return NULL;
+}
+static inline BOOL PeekMessage(MSG* lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg) {
+	(void)lpMsg; (void)hWnd; (void)wMsgFilterMin; (void)wMsgFilterMax; (void)wRemoveMsg;
+	return FALSE;
+}
+static inline BOOL GetMessage(MSG* lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax) {
+	(void)lpMsg; (void)hWnd; (void)wMsgFilterMin; (void)wMsgFilterMax;
+	return FALSE;
+}
+static inline BOOL TranslateMessage(const MSG* lpMsg) {
+	(void)lpMsg;
+	return TRUE;
+}
+static inline LRESULT DispatchMessage(const MSG* lpMsg) {
+	(void)lpMsg;
+	return 0;
+}
+static inline BOOL WaitMessage(void) {
+	SDL_Delay(1);
+	return TRUE;
+}
+static inline BOOL SystemParametersInfo(UINT uiAction, UINT uiParam, void* pvParam, UINT fWinIni) {
+	(void)uiAction; (void)uiParam; (void)pvParam; (void)fWinIni;
+	return FALSE;
+}
+static inline BOOL GetVersionEx(OSVERSIONINFO* lpVersionInformation) {
+	if (lpVersionInformation != NULL) {
+		lpVersionInformation->dwMajorVersion = 10;
+		lpVersionInformation->dwMinorVersion = 0;
+		lpVersionInformation->dwBuildNumber = 19045;
+		lpVersionInformation->dwPlatformId = VER_PLATFORM_WIN32_NT;
+		lpVersionInformation->szCSDVersion[0] = '\0';
+	}
+	return TRUE;
+}
+static inline BOOL GetCursorPos(POINT* lpPoint) {
+	if (lpPoint != NULL) {
+		int x = 0;
+		int y = 0;
+		SDL_GetMouseState(&x, &y);
+		lpPoint->x = x;
+		lpPoint->y = y;
+		return TRUE;
+	}
+	return FALSE;
+}
+static inline BOOL ScreenToClient(HWND hWnd, POINT* lpPoint) {
+	(void)hWnd;
+	return (lpPoint != NULL) ? TRUE : FALSE;
+}
+static inline HANDLE CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID) {
+	(void)dwFlags; (void)th32ProcessID;
+	return INVALID_HANDLE_VALUE;
+}
+static inline BOOL Process32First(HANDLE hSnapshot, PROCESSENTRY32* lppe) {
+	(void)hSnapshot; (void)lppe;
+	return FALSE;
+}
+static inline BOOL Process32Next(HANDLE hSnapshot, PROCESSENTRY32* lppe) {
+	(void)hSnapshot; (void)lppe;
+	return FALSE;
+}
+static inline BOOL CloseHandle(HANDLE hObject) {
+	(void)hObject;
+	return TRUE;
+}
+static inline BOOL InternetCloseHandle(HINTERNET hInternet) {
+	(void)hInternet;
+	return TRUE;
+}
+static inline HINTERNET InternetOpen(LPCTSTR lpszAgent, DWORD dwAccessType, LPCTSTR lpszProxyName, LPCTSTR lpszProxyBypass, DWORD dwFlags) {
+	(void)lpszAgent; (void)dwAccessType; (void)lpszProxyName; (void)lpszProxyBypass; (void)dwFlags;
+	return (HINTERNET)1;
+}
+static inline BOOL InternetSetOption(HINTERNET hInternet, DWORD dwOption, LPVOID lpBuffer, DWORD dwBufferLength) {
+	(void)hInternet; (void)dwOption; (void)lpBuffer; (void)dwBufferLength;
+	return TRUE;
+}
+static inline BOOL InternetQueryOption(HINTERNET hInternet, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength) {
+	(void)hInternet; (void)dwOption; (void)lpBuffer; (void)lpdwBufferLength;
+	return FALSE;
+}
+static inline BOOL InternetGetLastResponseInfo(LPDWORD lpdwError, LPSTR lpszBuffer, LPDWORD lpdwBufferLength) {
+	if (lpdwError != NULL) *lpdwError = 0;
+	if (lpszBuffer != NULL && lpdwBufferLength != NULL && *lpdwBufferLength > 0) lpszBuffer[0] = '\0';
+	return FALSE;
+}
+static inline BOOL PathIsURL(LPCTSTR pszPath) {
+	if (pszPath == NULL) return FALSE;
+	return (strncmp(pszPath, "http://", 7) == 0 || strncmp(pszPath, "https://", 8) == 0) ? TRUE : FALSE;
+}
+static inline HINTERNET InternetOpenUrl(HINTERNET hInternet, LPCTSTR lpszUrl, LPCTSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwFlags, DWORD_PTR dwContext) {
+	(void)hInternet; (void)lpszUrl; (void)lpszHeaders; (void)dwHeadersLength; (void)dwFlags; (void)dwContext;
+	return NULL;
+}
+static inline BOOL InternetReadFile(HINTERNET hFile, LPVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead) {
+	(void)hFile; (void)lpBuffer; (void)dwNumberOfBytesToRead;
+	if (lpdwNumberOfBytesRead != NULL) *lpdwNumberOfBytesRead = 0;
+	return FALSE;
+}
+#endif
+#endif
+
+#ifndef FAR
+#define FAR
+#endif
+#ifndef PASCAL
+#define PASCAL
+#endif
+#ifndef LOWORD
+#define LOWORD(l) ((WORD)(((DWORD_PTR)(l)) & 0xffff))
+#endif
+#ifndef HIWORD
+#define HIWORD(l) ((WORD)((((DWORD_PTR)(l)) >> 16) & 0xffff))
+#endif
+#ifndef LOBYTE
+#define LOBYTE(w) ((BYTE)(((DWORD_PTR)(w)) & 0xff))
+#endif
+#ifndef HIBYTE
+#define HIBYTE(w) ((BYTE)((((DWORD_PTR)(w)) >> 8) & 0xff))
+#endif
+#ifndef MAKELONG
+#define MAKELONG(a, b) ((LONG)(((WORD)(((DWORD_PTR)(a)) & 0xffff)) | (((DWORD)((WORD)(((DWORD_PTR)(b)) & 0xffff))) << 16)))
+#endif
+#ifndef MAKEWPARAM
+#define MAKEWPARAM(l, h) ((WPARAM)(DWORD)MAKELONG(l, h))
+#endif
+#ifndef MAKELPARAM
+#define MAKELPARAM(l, h) ((LPARAM)(DWORD)MAKELONG(l, h))
+#endif
+#ifndef MAKELRESULT
+#define MAKELRESULT(l, h) ((LRESULT)(DWORD)MAKELONG(l, h))
+#endif
+#ifndef TEXT
+#define TEXT(x) x
+#endif
+#ifndef _T
+#define _T(x) x
+#endif
+#ifndef _stscanf
+#define _stscanf sscanf
+#endif
+#ifndef GetDoubleClickTime
+#define GetDoubleClickTime() 500
+#endif
+#ifndef DDSCAPS_SYSTEMMEMORY
+#define DDSCAPS_SYSTEMMEMORY 0x00000800
+#endif
+#ifndef SW_HIDE
+#define SW_HIDE 0
+#endif
+#ifndef SM_CYVSCROLL
+#define SM_CYVSCROLL 20
+#endif
+#ifndef SM_CXSCREEN
+#define SM_CXSCREEN 0
+#endif
+#ifndef SM_CYSCREEN
+#define SM_CYSCREEN 1
+#endif
+#ifndef WS_EX_TOPMOST
+#define WS_EX_TOPMOST 0x00000008L
+#endif
+#ifndef WS_VISIBLE
+#define WS_VISIBLE 0x10000000L
+#endif
+#ifndef WM_USER
+#define WM_USER 0x0400
+#endif
+#ifndef PBS_SMOOTH
+#define PBS_SMOOTH 0x01
+#endif
+#ifndef PBM_SETRANGE
+#define PBM_SETRANGE (WM_USER + 1)
+#endif
+#ifndef PBM_SETPOS
+#define PBM_SETPOS (WM_USER + 2)
+#endif
+#ifndef PBM_STEPIT
+#define PBM_STEPIT (WM_USER + 5)
+#endif
+#ifndef PBM_SETSTEP
+#define PBM_SETSTEP (WM_USER + 4)
+#endif
+#ifndef PROGRESS_CLASS
+#define PROGRESS_CLASS "msctls_progress32"
+#endif
+typedef void* HMENU;
+static inline int ShowCursor(BOOL bShow) { (void)bShow; return 0; }
+static inline BOOL ShowWindow(HWND hWnd, int nCmdShow) { (void)hWnd; (void)nCmdShow; return TRUE; }
+static inline void InitCommonControls(void) {}
+static inline int GetSystemMetrics(int nIndex) { (void)nIndex; return 0; }
+static inline HWND CreateWindowEx(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
+	(void)dwExStyle; (void)lpClassName; (void)lpWindowName; (void)dwStyle; (void)X; (void)Y; (void)nWidth; (void)nHeight; (void)hWndParent; (void)hMenu; (void)hInstance; (void)lpParam;
+	return NULL;
+}
+static inline LRESULT SendMessage(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
+	(void)hWnd; (void)Msg; (void)wParam; (void)lParam;
+	return 0;
+}
+static inline BOOL SetWindowText(HWND hWnd, LPCSTR lpString) {
+	(void)hWnd; (void)lpString;
+	return TRUE;
+}
+#ifndef PLATFORM_WIDECHAR_TO_MULTIBYTE_DEFINED
+#define PLATFORM_WIDECHAR_TO_MULTIBYTE_DEFINED
+static inline int WideCharToMultiByte(UINT CodePage, DWORD dwFlags,
+	LPCWSTR lpWideCharStr, int cchWideChar,
+	LPSTR lpMultiByteStr, int cbMultiByte,
+	LPCSTR lpDefaultChar, BOOL* lpUsedDefaultChar) {
+	(void)CodePage; (void)dwFlags; (void)lpDefaultChar; (void)lpUsedDefaultChar;
+	if (lpWideCharStr == NULL || lpMultiByteStr == NULL || cbMultiByte <= 0) return 0;
+	if (cchWideChar == -1) {
+		int len = 0;
+		while (lpWideCharStr[len]) len++;
+		cchWideChar = len;
+	}
+	int n = (cchWideChar < cbMultiByte - 1) ? cchWideChar : cbMultiByte - 1;
+	for (int i = 0; i < n; ++i) {
+		wchar_t ch = lpWideCharStr[i];
+		lpMultiByteStr[i] = (ch <= 0x7f) ? (char)ch : '?';
+	}
+	lpMultiByteStr[n] = '\0';
+	return n;
+}
+#endif
+
+#ifndef PLATFORM_SYSTEMTIME_DEFINED
+#define PLATFORM_SYSTEMTIME_DEFINED
+typedef struct _SYSTEMTIME {
+	WORD wYear;
+	WORD wMonth;
+	WORD wDayOfWeek;
+	WORD wDay;
+	WORD wHour;
+	WORD wMinute;
+	WORD wSecond;
+	WORD wMilliseconds;
+} SYSTEMTIME, *PSYSTEMTIME, *LPSYSTEMTIME;
+#endif
+
+#ifndef PLATFORM_GET_LOCAL_TIME_STUB_DEFINED
+#define PLATFORM_GET_LOCAL_TIME_STUB_DEFINED
+static inline void GetLocalTime(LPSYSTEMTIME lpSystemTime) {
+	if (lpSystemTime) {
+		time_t aclock;
+		time(&aclock);
+		struct tm* now = localtime(&aclock);
+		lpSystemTime->wYear = now ? (WORD)(now->tm_year + 1900) : 1970;
+		lpSystemTime->wMonth = now ? (WORD)(now->tm_mon + 1) : 1;
+		lpSystemTime->wDayOfWeek = now ? (WORD)now->tm_wday : 0;
+		lpSystemTime->wDay = now ? (WORD)now->tm_mday : 1;
+		lpSystemTime->wHour = now ? (WORD)now->tm_hour : 0;
+		lpSystemTime->wMinute = now ? (WORD)now->tm_min : 0;
+		lpSystemTime->wSecond = now ? (WORD)now->tm_sec : 0;
+		lpSystemTime->wMilliseconds = 0;
+	}
+}
+#endif
+
+#if defined(PLATFORM_USE_SDL) && defined(PLATFORM_WIN32_HOST) && !defined(PLATFORM_WINSOCK_COMPAT_DEFINED)
+#define PLATFORM_WINSOCK_COMPAT_DEFINED
+typedef unsigned char u_char;
+typedef unsigned short u_short;
+typedef unsigned int u_int;
+typedef unsigned long u_long;
+typedef UINT_PTR SOCKET;
+
+#ifndef INVALID_SOCKET
+#define INVALID_SOCKET ((SOCKET)(~0))
+#endif
+#ifndef SOCKET_ERROR
+#define SOCKET_ERROR (-1)
+#endif
+#ifndef AF_INET
+#define AF_INET 2
+#endif
+#ifndef SOCK_STREAM
+#define SOCK_STREAM 1
+#endif
+#ifndef SOCK_DGRAM
+#define SOCK_DGRAM 2
+#endif
+#ifndef IPPROTO_TCP
+#define IPPROTO_TCP 6
+#endif
+#ifndef IPPROTO_UDP
+#define IPPROTO_UDP 17
+#endif
+#ifndef SOL_SOCKET
+#define SOL_SOCKET 0xffff
+#endif
+#ifndef SO_REUSEADDR
+#define SO_REUSEADDR 0x0004
+#endif
+#ifndef SO_LINGER
+#define SO_LINGER 0x0080
+#endif
+#ifndef SO_SNDBUF
+#define SO_SNDBUF 0x1001
+#endif
+#ifndef SO_RCVBUF
+#define SO_RCVBUF 0x1002
+#endif
+#ifndef FIONREAD
+#define FIONREAD 0x4004667f
+#endif
+#ifndef FIONBIO
+#define FIONBIO 0x8004667e
+#endif
+#ifndef INADDR_ANY
+#define INADDR_ANY 0x00000000
+#endif
+#ifndef SD_RECEIVE
+#define SD_RECEIVE 0
+#endif
+#ifndef SD_SEND
+#define SD_SEND 1
+#endif
+#ifndef SD_BOTH
+#define SD_BOTH 2
+#endif
+#ifndef WSAAPI
+#define WSAAPI __stdcall
+#endif
+#ifndef WSABASEERR
+#define WSABASEERR 10000
+#endif
+#ifndef WSANOTINITIALISED
+#define WSANOTINITIALISED (WSABASEERR + 93)
+#endif
+#ifndef WSAENETDOWN
+#define WSAENETDOWN (WSABASEERR + 50)
+#endif
+#ifndef WSAEAFNOSUPPORT
+#define WSAEAFNOSUPPORT (WSABASEERR + 47)
+#endif
+#ifndef WSAEINPROGRESS
+#define WSAEINPROGRESS (WSABASEERR + 36)
+#endif
+#ifndef WSAEMFILE
+#define WSAEMFILE (WSABASEERR + 24)
+#endif
+#ifndef WSAENOBUFS
+#define WSAENOBUFS (WSABASEERR + 55)
+#endif
+#ifndef WSAEPROTONOSUPPORT
+#define WSAEPROTONOSUPPORT (WSABASEERR + 43)
+#endif
+#ifndef WSAEPROTOTYPE
+#define WSAEPROTOTYPE (WSABASEERR + 41)
+#endif
+#ifndef WSAESOCKTNOSUPPORT
+#define WSAESOCKTNOSUPPORT (WSABASEERR + 44)
+#endif
+#ifndef WSAEADDRINUSE
+#define WSAEADDRINUSE (WSABASEERR + 48)
+#endif
+#ifndef WSAEADDRNOTAVAIL
+#define WSAEADDRNOTAVAIL (WSABASEERR + 49)
+#endif
+#ifndef WSAEFAULT
+#define WSAEFAULT (WSABASEERR + 14)
+#endif
+#ifndef WSAEINVAL
+#define WSAEINVAL (WSABASEERR + 22)
+#endif
+#ifndef WSAENOTSOCK
+#define WSAENOTSOCK (WSABASEERR + 38)
+#endif
+#ifndef WSAEINTR
+#define WSAEINTR (WSABASEERR + 4)
+#endif
+#ifndef WSAEALREADY
+#define WSAEALREADY (WSABASEERR + 37)
+#endif
+#ifndef WSAECONNREFUSED
+#define WSAECONNREFUSED (WSABASEERR + 61)
+#endif
+#ifndef WSAEISCONN
+#define WSAEISCONN (WSABASEERR + 56)
+#endif
+#ifndef WSAENETUNREACH
+#define WSAENETUNREACH (WSABASEERR + 51)
+#endif
+#ifndef WSAETIMEDOUT
+#define WSAETIMEDOUT (WSABASEERR + 60)
+#endif
+#ifndef WSAEWOULDBLOCK
+#define WSAEWOULDBLOCK (WSABASEERR + 35)
+#endif
+#ifndef WSAEOPNOTSUPP
+#define WSAEOPNOTSUPP (WSABASEERR + 45)
+#endif
+#ifndef WSAENOPROTOOPT
+#define WSAENOPROTOOPT (WSABASEERR + 42)
+#endif
+#ifndef WSAENETRESET
+#define WSAENETRESET (WSABASEERR + 52)
+#endif
+#ifndef WSAENOTCONN
+#define WSAENOTCONN (WSABASEERR + 57)
+#endif
+#ifndef WSAEACCES
+#define WSAEACCES (WSABASEERR + 13)
+#endif
+#ifndef WSAESHUTDOWN
+#define WSAESHUTDOWN (WSABASEERR + 58)
+#endif
+#ifndef WSAEMSGSIZE
+#define WSAEMSGSIZE (WSABASEERR + 40)
+#endif
+#ifndef WSAEHOSTUNREACH
+#define WSAEHOSTUNREACH (WSABASEERR + 65)
+#endif
+#ifndef WSAECONNABORTED
+#define WSAECONNABORTED (WSABASEERR + 53)
+#endif
+#ifndef WSAECONNRESET
+#define WSAECONNRESET (WSABASEERR + 54)
+#endif
+
+struct in_addr {
+	u_long s_addr;
+};
+
+struct sockaddr {
+	u_short sa_family;
+	char sa_data[14];
+};
+
+struct sockaddr_in {
+	short sin_family;
+	u_short sin_port;
+	struct in_addr sin_addr;
+	char sin_zero[8];
+};
+
+struct linger {
+	u_short l_onoff;
+	u_short l_linger;
+};
+
+struct hostent {
+	char* h_name;
+	char** h_aliases;
+	short h_addrtype;
+	short h_length;
+	char** h_addr_list;
+};
+
+struct timeval {
+	long tv_sec;
+	long tv_usec;
+};
+
+typedef struct fd_set {
+	u_int fd_count;
+	SOCKET fd_array[64];
+} fd_set;
+
+typedef struct WSAData {
+	WORD wVersion;
+	WORD wHighVersion;
+	char szDescription[257];
+	char szSystemStatus[129];
+	unsigned short iMaxSockets;
+	unsigned short iMaxUdpDg;
+	char* lpVendorInfo;
+} WSADATA, *LPWSADATA;
+
+extern "C" {
+	int WSAAPI WSAStartup(WORD wVersionRequested, LPWSADATA lpWSAData);
+	int WSAAPI WSACleanup(void);
+	int WSAAPI WSAGetLastError(void);
+	SOCKET WSAAPI socket(int af, int type, int protocol);
+	int WSAAPI bind(SOCKET s, const struct sockaddr* name, int namelen);
+	int WSAAPI connect(SOCKET s, const struct sockaddr* name, int namelen);
+	int WSAAPI listen(SOCKET s, int backlog);
+	SOCKET WSAAPI accept(SOCKET s, struct sockaddr* addr, int* addrlen);
+	int WSAAPI getsockopt(SOCKET s, int level, int optname, char* optval, int* optlen);
+	int WSAAPI setsockopt(SOCKET s, int level, int optname, const char* optval, int optlen);
+	int WSAAPI send(SOCKET s, const char* buf, int len, int flags);
+	int WSAAPI sendto(SOCKET s, const char* buf, int len, int flags, const struct sockaddr* to, int tolen);
+	int WSAAPI recv(SOCKET s, char* buf, int len, int flags);
+	int WSAAPI recvfrom(SOCKET s, char* buf, int len, int flags, struct sockaddr* from, int* fromlen);
+	int WSAAPI closesocket(SOCKET s);
+	int WSAAPI ioctlsocket(SOCKET s, long cmd, u_long* argp);
+	int WSAAPI shutdown(SOCKET s, int how);
+	u_long WSAAPI inet_addr(const char* cp);
+	char* WSAAPI inet_ntoa(struct in_addr in);
+	u_short WSAAPI htons(u_short hostshort);
+	u_long WSAAPI htonl(u_long hostlong);
+	u_short WSAAPI ntohs(u_short netshort);
+	u_long WSAAPI ntohl(u_long netlong);
+	int WSAAPI gethostname(char* name, int namelen);
+	struct hostent* WSAAPI gethostbyname(const char* name);
+	int WSAAPI select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, const struct timeval* timeout);
+}
+#endif
+#ifndef PLATFORM_CHAR_T_DEFINED
+#define PLATFORM_CHAR_T_DEFINED
+typedef WORD			char_t;
+#endif
+
+#ifndef PLATFORM_COLORREF_DEFINED
+#define PLATFORM_COLORREF_DEFINED
+typedef DWORD			COLORREF;
+#endif
+#ifndef RGB
+#define RGB(r,g,b)		((COLORREF)(((BYTE)(r)|((WORD)((BYTE)(g))<<8))|(((DWORD)(BYTE)(b))<<16)))
+#endif
+
+#ifndef FW_NORMAL
+#define FW_NORMAL 400
+#endif
+#ifndef FW_BOLD
+#define FW_BOLD 700
+#endif
+#ifndef FW_THIN
+#define FW_THIN 100
+#endif
+#ifndef FW_MEDIUM
+#define FW_MEDIUM 500
+#endif
+#ifndef FW_HEAVY
+#define FW_HEAVY 900
+#endif
+#ifndef FW_EXTRABOLD
+#define FW_EXTRABOLD 800
+#endif
+#ifndef FW_LIGHT
+#define FW_LIGHT 300
+#endif
+
+#ifndef LOGFONT_DEFINED
+#define LOGFONT_DEFINED
+typedef struct tagLOGFONT {
+	long lfHeight;
+	long lfWidth;
+	long lfEscapement;
+	long lfOrientation;
+	long lfWeight;
+	unsigned char lfItalic;
+	unsigned char lfUnderline;
+	unsigned char lfStrikeOut;
+	unsigned char lfCharSet;
+	unsigned char lfOutPrecision;
+	unsigned char lfClipPrecision;
+	unsigned char lfQuality;
+	unsigned char lfPitchAndFamily;
+	char lfFaceName[32];
+} LOGFONT, *PLOGFONT, *LPLOGFONT;
+#endif
+
+#ifndef TRANSPARENT
+#define TRANSPARENT 1
+#endif
+#ifndef OPAQUE
+#define OPAQUE 2
+#endif
+#ifndef TA_NOUPDATECP
+#define TA_NOUPDATECP 0
+#endif
+#ifndef TA_LEFT
+#define TA_LEFT 0
+#endif
+#ifndef TA_TOP
+#define TA_TOP 0
+#endif
+#ifndef TA_UPDATECP
+#define TA_UPDATECP 1
+#endif
+#ifndef TA_RIGHT
+#define TA_RIGHT 2
+#endif
+#ifndef TA_CENTER
+#define TA_CENTER 6
+#endif
+#ifndef TA_BASELINE
+#define TA_BASELINE 24
+#endif
+
+#ifndef ANSI_CHARSET
+#define ANSI_CHARSET 0
+#endif
+#ifndef DEFAULT_CHARSET
+#define DEFAULT_CHARSET 1
+#endif
+#ifndef SYMBOL_CHARSET
+#define SYMBOL_CHARSET 2
+#endif
+#ifndef SHIFTJIS_CHARSET
+#define SHIFTJIS_CHARSET 128
+#endif
+#ifndef HANGUL_CHARSET
+#define HANGUL_CHARSET 129
+#endif
+#ifndef GB2312_CHARSET
+#define GB2312_CHARSET 134
+#endif
+#ifndef OEM_CHARSET
+#define OEM_CHARSET 255
+#endif
+#ifndef OUT_DEFAULT_PRECIS
+#define OUT_DEFAULT_PRECIS 0
+#endif
+#ifndef CLIP_DEFAULT_PRECIS
+#define CLIP_DEFAULT_PRECIS 0
+#endif
+#ifndef DEFAULT_QUALITY
+#define DEFAULT_QUALITY 0
+#endif
+#ifndef DEFAULT_PITCH
+#define DEFAULT_PITCH 0
+#endif
+#ifndef FF_DONTCARE
+#define FF_DONTCARE 0
+#endif
+
+#ifndef _MAX_PATH
+#define _MAX_PATH 260
+#endif
+#ifndef MAX_PATH
+#define MAX_PATH _MAX_PATH
+#endif
+#ifndef FILE_ATTRIBUTE_DIRECTORY
+#define FILE_ATTRIBUTE_DIRECTORY 0x00000010
+#endif
+#ifndef INVALID_HANDLE_VALUE
+#define INVALID_HANDLE_VALUE ((HANDLE)(intptr_t)-1)
+#endif
+
+#ifndef WIN32_FIND_DATA_DEFINED
+#define WIN32_FIND_DATA_DEFINED
+typedef struct _WIN32_FIND_DATAA {
+	DWORD dwFileAttributes;
+	char cFileName[MAX_PATH];
+	char cAlternateFileName[14];
+} WIN32_FIND_DATA, *PWIN32_FIND_DATA, *LPWIN32_FIND_DATA;
+#endif
+
+#ifndef RECT_DEFINED
+#define RECT_DEFINED
+typedef struct tagRECT {
+	LONG left;
+	LONG top;
+	LONG right;
+	LONG bottom;
+} RECT, *PRECT, *LPRECT;
+#endif
+
+static inline BOOL SetRect(RECT* rect, int left, int top, int right, int bottom) {
+	if (!rect) {
+		return FALSE;
+	}
+	rect->left = left;
+	rect->top = top;
+	rect->right = right;
+	rect->bottom = bottom;
+	return TRUE;
+}
+
+#ifndef PLATFORM_WSPRINTF_STUB_DEFINED
+#define PLATFORM_WSPRINTF_STUB_DEFINED
+#include <stdarg.h>
+static inline int wsprintf(char* buf, const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	int ret = vsprintf(buf, fmt, args);
+	va_end(args);
+	return ret;
+}
+#endif
+
+#ifndef FindFirstFileA
+static inline HANDLE FindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATA lpFindFileData) {
+	(void)lpFileName;
+	(void)lpFindFileData;
+	return INVALID_HANDLE_VALUE;
+}
+#define FindFirstFileA FindFirstFileA
+#define FindFirstFile FindFirstFileA
+#endif
+#ifndef FindNextFileA
+static inline BOOL FindNextFileA(HANDLE hFindFile, LPWIN32_FIND_DATA lpFindFileData) {
+	(void)hFindFile;
+	(void)lpFindFileData;
+	return FALSE;
+}
+#define FindNextFileA FindNextFileA
+#define FindNextFile FindNextFileA
+#endif
+#ifndef FindClose
+static inline BOOL FindClose(HANDLE hFindFile) {
+	(void)hFindFile;
+	return TRUE;
+}
+#endif
+
+#ifndef GetLogicalDrives
+static inline DWORD GetLogicalDrives() {
+	return 0;
+}
+#endif
+#ifndef GetCurrentDirectory
+static inline DWORD GetCurrentDirectory(DWORD nBufferLength, LPSTR lpBuffer) {
+	if (lpBuffer && nBufferLength > 0) {
+		lpBuffer[0] = '\0';
+	}
+	return 0;
+}
+#endif
+
+#ifndef S_OK
+#define S_OK 0
+#endif
+#ifndef S_FALSE
+#define S_FALSE 1
+#endif
+#ifndef MB_OK
+#define MB_OK 0x00000000L
+#endif
+#ifndef MB_ICONERROR
+#define MB_ICONERROR 0x00000010L
+#endif
+#ifndef SUCCEEDED
+#define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
+#endif
+#ifndef FAILED
+#define FAILED(hr) (((HRESULT)(hr)) < 0)
+#endif
+
+#ifndef WM_USER
+#define WM_USER 0x0400
+#endif
+#ifndef WM_TIMER
+#define WM_TIMER 0x0113
+#endif
+#ifndef WM_CHAR
+#define WM_CHAR 0x0102
+#endif
+#ifndef WM_KEYDOWN
+#define WM_KEYDOWN 0x0100
+#endif
+#ifndef WM_KEYUP
+#define WM_KEYUP 0x0101
+#endif
+#ifndef WM_TEXTINPUT
+#define WM_TEXTINPUT 0x0111
+#endif
+#ifndef WM_TEXTEDITING
+#define WM_TEXTEDITING 0x0110
+#endif
+
+#ifndef VK_BACK
+#define VK_BACK 0x08
+#endif
+#ifndef VK_TAB
+#define VK_TAB 0x09
+#endif
+#ifndef VK_RETURN
+#define VK_RETURN 0x0D
+#endif
+#ifndef VK_SHIFT
+#define VK_SHIFT 0x10
+#endif
+#ifndef VK_CONTROL
+#define VK_CONTROL 0x11
+#endif
+#ifndef VK_ESCAPE
+#define VK_ESCAPE 0x1B
+#endif
+#ifndef VK_SPACE
+#define VK_SPACE 0x20
+#endif
+#ifndef VK_LEFT
+#define VK_LEFT 0x25
+#endif
+#ifndef VK_UP
+#define VK_UP 0x26
+#endif
+#ifndef VK_RIGHT
+#define VK_RIGHT 0x27
+#endif
+#ifndef VK_DOWN
+#define VK_DOWN 0x28
+#endif
+#ifndef VK_HOME
+#define VK_HOME 0x24
+#endif
+#ifndef VK_END
+#define VK_END 0x23
+#endif
+#ifndef VK_INSERT
+#define VK_INSERT 0x2D
+#endif
+#ifndef VK_DELETE
+#define VK_DELETE 0x2E
+#endif
+
+#ifndef POINT_DEFINED
+#define POINT_DEFINED
+typedef struct tagPOINT {
+	LONG x;
+	LONG y;
+} POINT, *PPOINT, *LPPOINT;
+#endif
+
+#ifndef SIZE_DEFINED
+#define SIZE_DEFINED
+typedef struct tagSIZE {
+	LONG cx;
+	LONG cy;
+} SIZE, *PSIZE, *LPSIZE;
+#endif
+
+#ifndef PLATFORM_MESSAGEBOX_STUB_DEFINED
+#define PLATFORM_MESSAGEBOX_STUB_DEFINED
+static inline int MessageBox(void* hWnd, const char* lpText, const char* lpCaption, unsigned int uType) {
+	(void)hWnd;
+	(void)uType;
+	fprintf(stderr, "[%s] %s\n", lpCaption ? lpCaption : "Message", lpText ? lpText : "");
+	return 1;
+}
+#endif
 
 	/* Define id_t for cross-platform compatibility (unsigned int on all platforms) */
 	typedef unsigned int   id_t;
-	/* Define id_t for cross-platform compatibility (unsigned int on all platforms) */
-	typedef unsigned int   id_t;
+
+#if defined(PLATFORM_USE_SDL) && defined(PLATFORM_WIN32_HOST)
+typedef SDL_Thread* platform_thread_t;
+typedef SDL_mutex* platform_mutex_t;
+typedef struct platform_event_s* platform_event_t;
+typedef void* platform_lib_t;
+
+#ifndef PLATFORM_INVALID_THREAD
+#define PLATFORM_INVALID_THREAD NULL
+#endif
+#ifndef PLATFORM_INVALID_MUTEX
+#define PLATFORM_INVALID_MUTEX NULL
+#endif
+#ifndef PLATFORM_INVALID_EVENT
+#define PLATFORM_INVALID_EVENT NULL
+#endif
+#ifndef PLATFORM_INVALID_LIB
+#define PLATFORM_INVALID_LIB NULL
+#endif
+#ifndef PLATFORM_INFINITE
+#define PLATFORM_INFINITE ((DWORD)-1)
+#endif
+
+#ifndef GetTickCount
+#define GetTickCount() platform_get_ticks()
+#endif
+
+// NOTE: g_CurrentTime is fed from timeGetTime() throughout Client/ (see
+// CWaitPacketUpdate.cpp, GCUpdateInfoHandler.cpp) and is expected to be real
+// system uptime (original Win32 timeGetTime semantics), NOT process/SDL
+// uptime - CGameUpdate.cpp's anti-cheat check (g_CurrentTime < 60000) assumes
+// system uptime and misfires within the first real minute of every process
+// if this aliases to platform_get_ticks()/SDL_GetTicks() like GetTickCount()
+// does. Capture the real winmm import under a distinct name *before* the
+// macro below rewrites the bare "timeGetTime" token, then route the macro
+// through that real call instead of platform_get_ticks().
+#if !defined(PLATFORM_REAL_TIMEGETTIME_DECLARED)
+#define PLATFORM_REAL_TIMEGETTIME_DECLARED
+#ifdef _MSC_VER
+#pragma comment(lib, "winmm.lib")
+#endif
+extern "C" __declspec(dllimport) DWORD __stdcall timeGetTime(void);
+static inline DWORD platform_get_system_time(void) { return timeGetTime(); }
+#endif
+#ifndef timeGetTime
+#define timeGetTime() platform_get_system_time()
+#endif
+
+typedef DWORD (*platform_thread_func_t)(void* param);
+
+DWORD platform_get_ticks(void);
+uint64_t platform_get_performance_counter(void);
+uint64_t platform_get_performance_frequency(void);
+void platform_sleep(DWORD ms);
+platform_thread_t platform_thread_create(platform_thread_func_t func, void* param);
+int platform_thread_wait(platform_thread_t thread);
+void platform_thread_close(platform_thread_t thread);
+platform_mutex_t platform_mutex_create(int initial_locked);
+int platform_mutex_lock(platform_mutex_t mutex);
+int platform_mutex_unlock(platform_mutex_t mutex);
+void platform_mutex_close(platform_mutex_t mutex);
+platform_event_t platform_event_create(int manual_reset, int initial_state);
+int platform_event_wait(platform_event_t event, DWORD timeout);
+int platform_event_signal(platform_event_t event);
+int platform_event_reset(platform_event_t event);
+void platform_event_close(platform_event_t event);
+platform_lib_t platform_lib_load(const char* filename);
+void* platform_lib_get_symbol(platform_lib_t lib, const char* symbol);
+void platform_lib_free(platform_lib_t lib);
+char platform_get_path_separator(void);
+int platform_file_exists(const char* filename);
+int platform_get_executable_dir(char* buffer, size_t size);
+int platform_create_directory(const char* path);
+int platform_is_ctrl_pressed(void);
+BYTE platform_get_scan_code(DWORD lParam);
+
+#ifndef RECT_DEFINED
+#define RECT_DEFINED
+typedef struct tagRECT {
+	LONG left;
+	LONG top;
+	LONG right;
+	LONG bottom;
+} RECT, *PRECT, *LPRECT;
+#endif
+#endif
 #ifndef TRUE
 #define TRUE 1
 #endif
@@ -187,6 +1609,43 @@ typedef struct IDirectSoundNotify* LPDIRECTSOUNDNOTIFY;
 #endif
 
 /* CRITICAL_SECTION for thread synchronization */
+#if defined(PLATFORM_USE_SDL) && defined(PLATFORM_WIN32_HOST)
+#ifndef _CRITICAL_SECTION_DEFINED
+#define _CRITICAL_SECTION_DEFINED
+
+typedef struct _CRITICAL_SECTION {
+	SDL_mutex* mutex;
+	int initialized;
+} CRITICAL_SECTION, *PCRITICAL_SECTION, *LPCRITICAL_SECTION;
+
+static inline void InitializeCriticalSection(CRITICAL_SECTION* cs) {
+	if (cs != NULL) {
+		cs->mutex = SDL_CreateMutex();
+		cs->initialized = (cs->mutex != NULL) ? 1 : 0;
+	}
+}
+
+static inline void EnterCriticalSection(CRITICAL_SECTION* cs) {
+	if (cs != NULL && cs->initialized) {
+		SDL_LockMutex(cs->mutex);
+	}
+}
+
+static inline void LeaveCriticalSection(CRITICAL_SECTION* cs) {
+	if (cs != NULL && cs->initialized) {
+		SDL_UnlockMutex(cs->mutex);
+	}
+}
+
+static inline void DeleteCriticalSection(CRITICAL_SECTION* cs) {
+	if (cs != NULL && cs->initialized) {
+		SDL_DestroyMutex(cs->mutex);
+		cs->mutex = NULL;
+		cs->initialized = 0;
+	}
+}
+#endif
+#elif !defined(PLATFORM_WINDOWS)
 #ifndef _CRITICAL_SECTION_DEFINED
 #define _CRITICAL_SECTION_DEFINED
 #include <pthread.h>
@@ -350,15 +1809,23 @@ static inline void* CreateFontIndirect(LOGFONT* lplf) {
 #endif
 
 /* Color type definitions */
+#ifndef PLATFORM_COLORREF_DEFINED
+#define PLATFORM_COLORREF_DEFINED
 typedef DWORD			COLORREF;
+#endif
+#ifndef RGB
 #define RGB(r,g,b)		((COLORREF)(((BYTE)(r)|((WORD)((BYTE)(g))<<8))|(((DWORD)(BYTE)(b))<<16)))
+#endif
 
 /* id_t conflicts with POSIX on macOS/Linux, only define on Windows */
 #ifdef PLATFORM_WINDOWS
 typedef DWORD			id_t;
 #endif
 
+#ifndef PLATFORM_CHAR_T_DEFINED
+#define PLATFORM_CHAR_T_DEFINED
 typedef WORD			char_t;
+#endif
 
 /* ============================================================================
  * Common Windows Type Definitions (for cross-platform compatibility)
@@ -477,11 +1944,14 @@ typedef WORD			char_t;
 	#endif
 
 	/* Stub for MessageBox - just prints to stderr */
+#ifndef PLATFORM_MESSAGEBOX_STUB_DEFINED
+#define PLATFORM_MESSAGEBOX_STUB_DEFINED
 	static inline int MessageBox(void* hWnd, const char* lpText, const char* lpCaption, unsigned int uType) {
 		(void)hWnd; (void)uType;
 		fprintf(stderr, "[%s] %s\n", lpCaption, lpText);
 		return 1;
 	}
+#endif
 
 	/* SystemParametersInfo constants */
 	#define SPI_GETMOUSE			0x0003
@@ -698,6 +2168,8 @@ typedef WORD			char_t;
 		return 0;
 	}
 
+#ifndef PLATFORM_WIDECHAR_TO_MULTIBYTE_DEFINED
+#define PLATFORM_WIDECHAR_TO_MULTIBYTE_DEFINED
 	/* WideCharToMultiByte stub - basic conversion for non-Windows */
 	static inline int WideCharToMultiByte(UINT CodePage, DWORD dwFlags,
 		LPCWSTR lpWideCharStr, int cchWideChar,
@@ -718,6 +2190,7 @@ typedef WORD			char_t;
 		lpMultiByteStr[cchWideChar < cbMultiByte ? cchWideChar : cbMultiByte - 1] = '\0';
 		return cchWideChar;
 	}
+#endif
 
 	/* SetWindowText stub - no-op on non-Windows */
 	static inline BOOL SetWindowText(void* hWnd, const char* lpText) {
@@ -839,8 +2312,12 @@ typedef WORD			char_t;
 	#endif
 
 	/* Windows timing functions */
+	#ifndef GetTickCount
 	#define GetTickCount()		platform_get_ticks()
+	#endif
+	#ifndef timeGetTime
 	#define timeGetTime()		platform_get_ticks()
+	#endif
 #endif
 
 /* ============================================================================
@@ -851,7 +2328,7 @@ typedef WORD			char_t;
 	/* Windows types */
 	#ifndef _WINDOWS_
 		#define WIN32_LEAN_AND_MEAN
-		#include <windows.h>
+#include <windows.h>
 	#endif
 
 	typedef HANDLE	platform_thread_t;
@@ -1202,6 +2679,8 @@ typedef struct tagMINMAXINFO {
 } MINMAXINFO, *PMINMAXINFO, *LPMINMAXINFO;
 
 /* SYSTEMTIME structure (date and time) */
+#ifndef PLATFORM_SYSTEMTIME_DEFINED
+#define PLATFORM_SYSTEMTIME_DEFINED
 typedef struct _SYSTEMTIME {
     WORD wYear;
     WORD wMonth;
@@ -1212,6 +2691,7 @@ typedef struct _SYSTEMTIME {
     WORD wSecond;
     WORD wMilliseconds;
 } SYSTEMTIME, *PSYSTEMTIME, *LPSYSTEMTIME;
+#endif
 
 /* DEVMODE structure (display mode settings) */
 #define ENUM_CURRENT_SETTINGS ((DWORD)-1)
@@ -1904,6 +3384,8 @@ static inline DWORD GetCurrentDirectory(DWORD nBufferLength, LPSTR lpBuffer) {
 }
 
 /* GetLocalTime - fill SYSTEMTIME structure with current local time */
+#ifndef PLATFORM_GET_LOCAL_TIME_STUB_DEFINED
+#define PLATFORM_GET_LOCAL_TIME_STUB_DEFINED
 static inline void GetLocalTime(LPSYSTEMTIME lpSystemTime) {
     /* macOS stub - get current local time */
     if (lpSystemTime) {
@@ -1922,6 +3404,7 @@ static inline void GetLocalTime(LPSYSTEMTIME lpSystemTime) {
         lpSystemTime->wMilliseconds = 0;
     }
 }
+#endif
 #endif
 
 /* SetSurfaceInfo for SDL backend - copies S_SURFACEINFO */
@@ -1960,9 +3443,6 @@ static inline void SetSurfaceInfo(S_SURFACEINFO* dest, const S_SURFACEINFO* src)
 #define MAKELRESULT(l, h) ((LRESULT)(DWORD)MAKELONG(l, h))
 #endif
 #endif
-
-#ifdef __cplusplus
-}
 #endif
 
-#endif /* __PLATFORM_H__ */
+#endif /* __DARKEDEN_CLIENT_PLATFORM_H__ */

@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include "SpriteLib/SpriteLibBackend.h"
+#include "DebugLog.h"
 
 #ifdef USE_SDL_BACKEND
 #include <SDL.h>
@@ -58,6 +59,13 @@ public:
 			}
 		}
 		m_fonts.clear();
+
+		for (auto& it : m_cjkFallbackFonts) {
+			if (it.second) {
+				TTF_CloseFont(it.second);
+			}
+		}
+		m_cjkFallbackFonts.clear();
 	}
 
 	bool Initialize() override
@@ -88,6 +96,17 @@ public:
 		}
 
 		const char* fontPaths[] = {
+#if defined(_WIN32) || defined(_WIN64)
+			// The original client requested "MS Sans Serif" via GDI
+			// (CreateFontIndirect - see VS_UI_Base.cpp's szFontName table),
+			// which Windows resolves to this exact file. This port's
+			// FontDesc never carries the requested face name through to
+			// AcquireFont (only size survives), so without this the game
+			// silently fell back to NotoSans/DejaVuSans - a completely
+			// different, much smoother/modern-looking typeface than the
+			// original's classic bitmap-ish look.
+			"C:\\Windows\\Fonts\\micross.ttf",
+#endif
 			"Data/Font/NotoSansCJK-Regular.ttc",
 			"Data/Font/NotoSans-Regular.ttf",
 			"Data/Font/DejaVuSans.ttf",
@@ -112,6 +131,7 @@ public:
 
 		int id = static_cast<int>(m_fonts.size());
 		m_fonts.push_back(font);
+		m_fontSizeById.push_back(size);
 		m_sizeToFontId[size] = id;
 
 		FontHandle handle;
@@ -137,7 +157,7 @@ public:
 
 	bool GetGlyphMetrics(FontHandle font, uint32_t codepoint, GlyphMetrics& outMetrics) override
 	{
-		TTF_Font* ttf = GetFont(font);
+		TTF_Font* ttf = SelectFontForCodepoint(font, codepoint);
 		if (!ttf)
 			return false;
 
@@ -178,7 +198,7 @@ public:
 
 	const Glyph* GetGlyph(FontHandle font, uint32_t codepoint, const Color& color) override
 	{
-		TTF_Font* ttf = GetFont(font);
+		TTF_Font* ttf = SelectFontForCodepoint(font, codepoint);
 		if (!ttf)
 			return NULL;
 
@@ -260,7 +280,33 @@ public:
 		if (!glyph.handle)
 			return NULL;
 
+		// fix: GlyphKey includes the RGB color, so every distinct
+		// (font, codepoint, color) combination gets its own permanently
+		// cached entry - m_glyphs was never evicted/bounded. The game
+		// renders text in many different colors (chat/system-message
+		// colors, alignment name colors, damage numbers, etc.), so over a
+		// play session this cache grows without bound: more entries to
+		// hash/manage every draw, plus a real TTF_RenderUTF8_Blended cost
+        // (a visible hitch) each time a not-yet-seen combination first
+		// appears - e.g. a system "Help:" message using a color that
+		// hasn't been rendered yet. Cap the cache size and reset it once
+		// it gets large, rather than letting it grow for the entire
+		// session.
+		const size_t MAX_CACHED_GLYPHS = 3000;
+		if (m_glyphs.size() >= MAX_CACHED_GLYPHS)
+		{
+			for (auto& it : m_glyphs)
+			{
+				if (it.second.handle)
+				{
+					spritectl_destroy_sprite(reinterpret_cast<spritectl_sprite_t>(it.second.handle));
+				}
+			}
+			m_glyphs.clear();
+		}
+
 		m_glyphs.emplace(key, glyph);
+
 		return &m_glyphs.find(key)->second;
 	}
 
@@ -283,6 +329,78 @@ private:
 		if (handle.id < 0 || handle.id >= static_cast<int>(m_fonts.size()))
 			return NULL;
 		return m_fonts[handle.id];
+	}
+
+	// The primary font (see the fontPaths list in AcquireFont) is
+	// deliberately micross.ttf/MS Sans Serif on Windows, to match the
+	// original client's look - but that font has no CJK glyphs at all, so
+	// Korean (or Chinese/Japanese) NPC/quest dialogue rendered through it
+	// alone comes out as tofu/wrong glyphs. Lazily open a same-size CJK
+	// font on first use and cache it (including caching a failed lookup as
+	// NULL, so a missing font file doesn't retry a filesystem open every
+	// single glyph).
+	TTF_Font* GetCjkFallbackFont(int size)
+	{
+		auto it = m_cjkFallbackFonts.find(size);
+		if (it != m_cjkFallbackFonts.end())
+			return it->second;
+
+		const char* cjkFontPaths[] = {
+#if defined(_WIN32) || defined(_WIN64)
+			// Malgun Gothic ships as a base Windows UI font since Vista
+			// (present even without an East Asian language pack installed)
+			// and covers Hangul.
+			"C:\\Windows\\Fonts\\malgun.ttf",
+#endif
+			"Data/Font/NotoSansCJK-Regular.ttc",
+			// Apple SD Gothic Neo is macOS's built-in Korean UI font
+			// (present on every Catalina+ install, no extra language pack
+			// needed) - the macOS equivalent of malgun.ttf above. Hiragino
+			// Sans GB below is Simplified-Chinese-only and does NOT cover
+			// Hangul, so it must come after this, not instead of it.
+			"/System/Library/Fonts/AppleSDGothicNeo.ttc",
+			"Data/Font/Hiragino Sans GB.ttc",
+			"/System/Library/Fonts/Hiragino Sans GB.ttc",
+			NULL
+		};
+
+		TTF_Font* font = NULL;
+		for (int i = 0; cjkFontPaths[i] != NULL; ++i) {
+			font = TTF_OpenFont(cjkFontPaths[i], size);
+			if (font)
+				break;
+		}
+
+		m_cjkFallbackFonts[size] = font;
+		return font;
+	}
+
+	// Picks which font to actually render/measure a given codepoint with:
+	// the primary font if it has the glyph, otherwise a same-size CJK
+	// fallback if that has it, otherwise the primary anyway (best effort -
+	// TTF_ttf renders its own missing-glyph box in that case, which is an
+	// honest "no glyph available" signal instead of the wrong-script mojibake
+	// this used to produce before NormalizeText's encoding fix).
+	TTF_Font* SelectFontForCodepoint(FontHandle handle, uint32_t codepoint)
+	{
+		TTF_Font* primary = GetFont(handle);
+		if (!primary)
+			return NULL;
+
+		if (codepoint < 0x80)
+			return primary;
+
+		if (TTF_GlyphIsProvided32(primary, codepoint))
+			return primary;
+
+		if (handle.id < 0 || handle.id >= static_cast<int>(m_fontSizeById.size()))
+			return primary;
+
+		TTF_Font* fallback = GetCjkFallbackFont(m_fontSizeById[handle.id]);
+		if (fallback && TTF_GlyphIsProvided32(fallback, codepoint))
+			return fallback;
+
+		return primary;
 	}
 
 	std::string EncodeUtf8(uint32_t codepoint) const
@@ -317,8 +435,10 @@ private:
 private:
 	bool m_initialized;
 	std::vector<TTF_Font*> m_fonts;
+	std::vector<int> m_fontSizeById;
 	std::unordered_map<int, int> m_sizeToFontId;
 	std::unordered_map<GlyphKey, Glyph, GlyphKeyHash> m_glyphs;
+	std::unordered_map<int, TTF_Font*> m_cjkFallbackFonts;	// keyed by point size
 };
 
 TextBackend* CreateSDLTextBackend()

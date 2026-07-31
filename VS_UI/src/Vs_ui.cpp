@@ -22,6 +22,7 @@
 #include "MHelpDef.h"
 #include "../../basic/timer2.h"
 #include "CDirectInput.h"
+#include "../../Client/Profiler.h"
 
 #ifdef PLATFORM_WINDOWS
 // On Windows, gpC_Imm is a macro defined in VS_UI_Widget.h
@@ -706,6 +707,13 @@ bool C_VS_UI::MouseControl(UINT message, int x, int y)
 	
 	gpC_mouse_pointer->Set(message, x, y);
 
+	if (m_pC_title != NULL &&
+		(message == M_LEFTBUTTON_DOWN || message == M_LB_DOUBLECLICK) &&
+		m_pC_title->TryRunSideMenuAction(message, x, y))
+	{
+		return true;
+	}
+
 	if (message == M_MOVING)
 	{
 		g_descriptor_manager.Unset();
@@ -1387,11 +1395,14 @@ void C_VS_UI::StartGame()
 	}
 
 	m_pC_game = new C_VS_UI_GAME;
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI::StartGame: after new C_VS_UI_GAME, before SetDefault\n"); fclose(f); } }
 
 //	if(!bl_load_set)
 	gpC_vs_ui_window_manager->SetDefault();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI::StartGame: after SetDefault, before m_pC_game->Start()\n"); fclose(f); } }
 
 	m_pC_game->Start();
+	{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "C_VS_UI::StartGame: after m_pC_game->Start()\n"); fclose(f); } }
 
 #ifndef _LIB
 	gbl_game_mode = true;
@@ -1661,14 +1672,18 @@ void C_VS_UI::Show()
 //	DEBUG_ADD("[C_VS_UI] Show");
 #endif
 #ifndef _LIB
+	__BEGIN_PROFILE("Show_ShowItem")
 	if (gbl_game_mode)
 		ShowItem();
+	__END_PROFILE("Show_ShowItem")
 #endif
 
+	__BEGIN_PROFILE("Show_WindowManager")
 	if(IsRunningProgress())			//���α׷��� �鰥�� �ٿ�Ǵ°� �־ ������ ���� ���̳� �ؼ� ��� �ٲ� // �Դٰ� �ӵ��� UP!
 		m_pC_progress->Show();
 	else
 		gpC_window_manager->Show();
+	__END_PROFILE("Show_WindowManager")
 
 
 #ifndef _LIB
@@ -1825,8 +1840,10 @@ if(gbl_info_show)
 		}
 	}
 
+	__BEGIN_PROFILE("Show_DescriptorManager")
 	if(!IsRunningProgress())
 		g_descriptor_manager.Show();
+	__END_PROFILE("Show_DescriptorManager")
 
 #ifndef _LIB
 	if (gpC_press_button)

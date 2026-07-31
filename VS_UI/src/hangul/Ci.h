@@ -11,7 +11,9 @@
 #ifndef __CI_H__
 #define __CI_H__
 
-#ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_USE_SDL
+#include <Platform.h>
+#elif defined(PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 #include "BasicS.h"
