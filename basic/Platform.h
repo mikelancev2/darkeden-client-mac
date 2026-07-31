@@ -2521,7 +2521,16 @@ typedef struct _SYSTEMTIME {
 } SYSTEMTIME, *PSYSTEMTIME, *LPSYSTEMTIME;
 #endif
 
-/* DEVMODE structure (display mode settings) */
+/* DEVMODE structure (display mode settings)
+ * Given its own guard (independent of RECT_DEFINED, which it used to be
+ * nested under): RECT/POINT/MINMAXINFO are already provided unconditionally
+ * earlier in this file, so on non-Windows-host SDL builds RECT_DEFINED is
+ * already set by the time this is reached and this whole struct - the only
+ * thing here without its own definition elsewhere - was silently skipped,
+ * leaving LPDEVMODE undefined for ChangeDisplaySettingsA/EnumDisplaySettingsA
+ * below. */
+#ifndef DEVMODE_DEFINED
+#define DEVMODE_DEFINED
 #define ENUM_CURRENT_SETTINGS ((DWORD)-1)
 #define DM_BITSPERPEL 0x00040000
 #define DM_PELSWIDTH 0x00080000
@@ -2561,6 +2570,7 @@ typedef struct _devicemode {
     DWORD  dmDisplayFlags;
     DWORD  dmDisplayFrequency;
 } DEVMODE, *PDEVMODE, *LPDEVMODE;
+#endif /* DEVMODE_DEFINED */
 
 #endif /* RECT_DEFINED */
 
