@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Dark Eden Classic - Updater</title>
+<style>
+	html, body {
+		margin: 0; padding: 0; width: 100%; height: 100%;
+		background: #0a0605; color: #d8d0c8;
+		font-family: Arial, Helvetica, sans-serif; font-size: 13px;
+		overflow: hidden;
+	}
+	body {
+		background-image: url('https://darkedenclassic.com/assets/backgrounds/hero-bg-4k.webp');
+		background-size: cover;
+		background-position: center;
+	}
+	a { color: inherit; text-decoration: none; }
+
+	.frame {
+		position: absolute; inset: 0;
+		display: flex; flex-direction: column;
+		background: linear-gradient(180deg, rgba(7,6,6,0.55) 0%, rgba(7,6,6,0.15) 30%, rgba(7,6,6,0.25) 70%, rgba(7,6,6,0.75) 100%);
+	}
+
+	/* Top bar: logo + nav */
+	.topbar {
+		display: flex; align-items: center; justify-content: space-between;
+		padding: 14px 20px;
+	}
+	.logo img { height: 46px; display: block; }
+	.nav { display: flex; gap: 10px; }
+	.nav button {
+		background: rgba(15,10,10,0.75); border: 1px solid #551c18; color: #d8d0c8;
+		font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+		padding: 8px 14px; cursor: pointer; font-family: inherit;
+	}
+	.nav button:hover { background: rgba(60,20,18,0.85); border-color: #c94236; color: #fff; }
+
+	/* Middle: news panel (left) + server/resolution (right) */
+	.middle {
+		flex: 1; display: flex; gap: 16px; padding: 0 20px; min-height: 0;
+	}
+	.news-panel {
+		width: 563px; max-width: 46%;
+		background: rgba(7,6,6,0.82); border: 1px solid #551c18;
+		overflow: hidden;
+	}
+	.news-panel iframe {
+		width: 100%; height: 100%; border: 0; background: transparent;
+	}
+
+	.side-panels {
+		flex: 1; display: flex; flex-direction: column; gap: 14px; max-width: 260px;
+	}
+	.panel-title {
+		background: #7a1613; color: #fff; font-size: 12px; letter-spacing: 1px;
+		text-transform: uppercase; padding: 8px 12px; font-weight: bold;
+	}
+	.panel-body {
+		background: rgba(7,6,6,0.82); border: 1px solid #551c18; border-top: none;
+		padding: 8px;
+	}
+	.server-item, .res-item {
+		padding: 8px 10px; margin-bottom: 4px; cursor: pointer;
+		border: 1px solid transparent; font-size: 12px;
+	}
+	.server-item:hover, .res-item:hover { background: rgba(60,20,18,0.6); }
+	.server-item.selected, .res-item.selected {
+		background: rgba(90,25,20,0.8); border-color: #c94236; color: #fff;
+	}
+	.server-item .dot {
+		display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+		background: #3fbf5f; margin-right: 8px;
+	}
+
+	/* Bottom: status/progress + play button */
+	.bottom {
+		display: flex; align-items: center; gap: 16px;
+		padding: 16px 20px; background: rgba(7,6,6,0.85); border-top: 1px solid #361311;
+	}
+	.status-area { flex: 1; min-width: 0; }
+	.status-text {
+		font-size: 12px; color: #beb8b2; margin-bottom: 6px;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+	}
+	.progress-track {
+		height: 8px; background: #201414; border: 1px solid #551c18; overflow: hidden;
+	}
+	.progress-fill {
+		height: 100%; width: 0%; background: linear-gradient(90deg,#7a1613,#c94236);
+		transition: width 0.2s ease;
+	}
+	.play-btn {
+		border: none; background: none; cursor: pointer; padding: 0;
+	}
+	.play-btn img { height: 54px; display: block; }
+	.play-btn:disabled { opacity: 0.5; cursor: default; }
+</style>
+</head>
+<body>
+<div class="frame">
+
+	<div class="topbar">
+		<div class="logo"><img src="https://darkedenclassic.com/assets/logos/logo-header.png" alt="Dark Eden Classic"></div>
+		<div class="nav">
+			<button data-url="https://darkedenclassic.com/index.php">Home</button>
+			<button data-url="https://darkedenclassic.com/ranking.php">Ranking</button>
+			<button data-url="https://darkedenclassic.com/register.php">Create Account</button>
+			<button data-url="https://darkedenclassic.com/downloads.php">Downloads</button>
+			<!-- Discord link is a placeholder on the site (config.php: discord_url) -
+			     wire this up once a real invite link is set there. -->
+		</div>
+	</div>
+
+	<div class="middle">
+		<div class="news-panel">
+			<iframe src="https://darkedenclassic.com/patch/updater-news.html"></iframe>
+		</div>
+
+		<div class="side-panels">
+			<div>
+				<div class="panel-title">Server List</div>
+				<div class="panel-body" id="serverList">
+					<div class="server-item selected" data-server="1">
+						<span class="dot"></span>Dark Eden Classic
+					</div>
+				</div>
+			</div>
+			<div>
+				<div class="panel-title">Resolution</div>
+				<div class="panel-body" id="resolutionList">
+					<div class="res-item" data-mode="0000000001">Windowed 800x600</div>
+					<div class="res-item" data-mode="0000000002">Fullscreen 800x600</div>
+					<div class="res-item selected" data-mode="0000000003">Windowed 1024x768</div>
+					<div class="res-item" data-mode="0000000004">Fullscreen 1024x768</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="bottom">
+		<div class="status-area">
+			<div class="status-text" id="statusText">Ready.</div>
+			<div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+		</div>
+		<button class="play-btn" id="playBtn">
+			<img src="https://darkedenclassic.com/assets/ui/button-play.png" alt="Play">
+		</button>
+	</div>
+
+</div>
+
+<script>
+	var selectedMode = "0000000003";
+
+	document.querySelectorAll('.nav button').forEach(function (btn) {
+		btn.addEventListener('click', function () {
+			postToNative({ action: 'openUrl', url: btn.getAttribute('data-url') });
+		});
+	});
+
+	document.querySelectorAll('.res-item').forEach(function (item) {
+		item.addEventListener('click', function () {
+			document.querySelectorAll('.res-item').forEach(function (i) { i.classList.remove('selected'); });
+			item.classList.add('selected');
+			selectedMode = item.getAttribute('data-mode');
+		});
+	});
+
+	function postToNative(msg) {
+		if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.native) {
+			window.webkit.messageHandlers.native.postMessage(msg);
+		} else {
+			console.log('(no native bridge) ->', msg);
+		}
+	}
+
+	document.getElementById('playBtn').addEventListener('click', function () {
+		document.getElementById('playBtn').disabled = true;
+		postToNative({ action: 'play', mode: selectedMode });
+	});
+
+	// Called from native code (Updater/main.mm) as the update check/download
+	// progresses. See UpdateStage in update_logic.h for the stage values.
+	window.updaterBridge = {
+		onProgress: function (p) {
+			var statusEl = document.getElementById('statusText');
+			var fillEl = document.getElementById('progressFill');
+			statusEl.textContent = p.message;
+			if (p.fileCount > 0) {
+				var pct = Math.min(100, Math.round((p.fileIndex / p.fileCount) * 100));
+				fillEl.style.width = pct + '%';
+			}
+			if (p.stage === 'Complete' || p.stage === 'ServerUnreachable') {
+				fillEl.style.width = '100%';
+			}
+			if (p.stage === 'Error') {
+				document.getElementById('playBtn').disabled = false;
+			}
+		},
+		onLaunching: function () {
+			document.getElementById('statusText').textContent = 'Launching...';
+		}
+	};
+</script>
+</body>
+</html>
