@@ -1489,7 +1489,7 @@ InitGame()
 	log_set_console_output(false);
 	log_set_level(LOG_LEVEL_DEBUG);
 #endif
-	_mkdir("Log");
+	platform_create_directory("Log");
 	log_set_file_output("Log/darkeden.log");
 
 	g_pFileDef = new Properties;
