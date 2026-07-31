@@ -1943,50 +1943,9 @@ typedef WORD			char_t;
 		#define _TCHAR	TCHAR
 	#endif
 
-	/* Stub for MessageBox - just prints to stderr */
-#ifndef PLATFORM_MESSAGEBOX_STUB_DEFINED
-#define PLATFORM_MESSAGEBOX_STUB_DEFINED
-	static inline int MessageBox(void* hWnd, const char* lpText, const char* lpCaption, unsigned int uType) {
-		(void)hWnd; (void)uType;
-		fprintf(stderr, "[%s] %s\n", lpCaption, lpText);
-		return 1;
-	}
-#endif
-
 	/* SystemParametersInfo constants */
 	#define SPI_GETMOUSE			0x0003
 	#define SPI_SETMOUSE			0x0004
-
-	/* Stub for SystemParametersInfo */
-	static inline BOOL SystemParametersInfo(UINT uiAction, UINT uiParam, void* pvParam, UINT fWinIni) {
-		(void)uiAction; (void)uiParam; (void)pvParam; (void)fWinIni;
-		// Non-Windows platforms don't have mouse acceleration settings in the same way
-		return FALSE;
-	}
-
-	/* Note: GetCursorPos and ScreenToClient are defined as inline functions below,
-	   but they require POINT to be fully defined first (included from Client_PCH.h) */
-
-	/* Stub for GetCursorPos - gets mouse position in SDL */
-	static inline BOOL GetCursorPos(void* lpPoint) {
-		if (lpPoint) {
-			typedef struct { LONG x; LONG y; } POINT;
-			POINT* p = (POINT*)lpPoint;
-			int x, y;
-			SDL_GetMouseState(&x, &y);
-			p->x = x;
-			p->y = y;
-			return TRUE;
-		}
-		return FALSE;
-	}
-
-	/* Stub for ScreenToClient - no-op for SDL (coordinates are already relative to window) */
-	static inline BOOL ScreenToClient(void* hWnd, void* lpPoint) {
-		(void)hWnd;
-		// SDL already gives us window-relative coordinates
-		return lpPoint ? TRUE : FALSE;
-	}
 
 	/* String comparison (case-insensitive) - Windows stricmp equivalent */
 	#define stricmp strcasecmp
@@ -2012,40 +1971,6 @@ typedef WORD			char_t;
 		char szExeFile[MAX_PATH];
 	} PROCESSENTRY32;
 
-	/* CreateToolhelp32Snapshot stub - returns invalid handle on non-Windows */
-	static inline void* CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID) {
-		(void)dwFlags;
-		(void)th32ProcessID;
-		return INVALID_HANDLE_VALUE;
-	}
-
-	/* Process32First stub - always fails on non-Windows */
-	static inline BOOL Process32First(void* hSnapshot, PROCESSENTRY32* lppe) {
-		(void)hSnapshot;
-		(void)lppe;
-		return FALSE;
-	}
-
-	/* Process32Next stub - always fails on non-Windows */
-	static inline BOOL Process32Next(void* hSnapshot, PROCESSENTRY32* lppe) {
-		(void)hSnapshot;
-		(void)lppe;
-		return FALSE;
-	}
-
-	/* FindWindow stub - not implemented on non-Windows */
-	static inline void* FindWindow(const char* lpClassName, const char* lpWindowName) {
-		(void)lpClassName;
-		(void)lpWindowName;
-		return NULL; // No window finding on non-Windows platforms
-	}
-
-	/* ShowCursor stub - always returns 0 (cursor hidden) on non-Windows */
-	static inline int ShowCursor(BOOL bShow) {
-		(void)bShow;
-		return 0;
-	}
-
 	/* InitCommonControls stub - no-op on non-Windows */
 	#define InitCommonControls()
 
@@ -2056,16 +1981,6 @@ typedef WORD			char_t;
 	#define SM_CYSIZEFRAME 33
 	#define SM_CYMENU 15
 	#define SM_CXSIZEFRAME 32
-
-	/* GetSystemMetrics stub - returns default values on non-Windows */
-	static inline int GetSystemMetrics(int nIndex) {
-		switch(nIndex) {
-			case SM_CXSCREEN: return 1024;
-			case SM_CYSCREEN: return 768;
-			case SM_CYVSCROLL: return 16;
-			default: return 0;
-		}
-	}
 
 	/* Window style constants */
 	#define WS_EX_TOPMOST 0x00000008
@@ -2162,12 +2077,6 @@ typedef WORD			char_t;
 	#define MCI_NOTIFY_ABORTED 0x0004
 	#define MCI_NOTIFY_FAILURE 0x0008
 
-	/* SendMessage stub - no-op on non-Windows */
-	static inline LRESULT SendMessage(void* hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
-		(void)hWnd; (void)Msg; (void)wParam; (void)lParam;
-		return 0;
-	}
-
 #ifndef PLATFORM_WIDECHAR_TO_MULTIBYTE_DEFINED
 #define PLATFORM_WIDECHAR_TO_MULTIBYTE_DEFINED
 	/* WideCharToMultiByte stub - basic conversion for non-Windows */
@@ -2192,91 +2101,10 @@ typedef WORD			char_t;
 	}
 #endif
 
-	/* SetWindowText stub - no-op on non-Windows */
-	static inline BOOL SetWindowText(void* hWnd, const char* lpText) {
-		(void)hWnd; (void)lpText;
-		return TRUE;
-	}
-
-	/* ShowWindow stub - no-op on non-Windows */
-	static inline BOOL ShowWindow(void* hWnd, int nCmdShow) {
-		(void)hWnd; (void)nCmdShow;
-		return TRUE;
-	}
-
-	/* CreateWindowEx stub - returns NULL on non-Windows (no window creation) */
-	static inline void* CreateWindowEx(DWORD dwExStyle, const char* lpClassName,
-	                                    const char* lpWindowName, DWORD dwStyle,
-	                                    int X, int Y, int nWidth, int nHeight,
-	                                    void* hWndParent, void* hMenu, void* hInstance, void* lpParam) {
-		(void)dwExStyle; (void)lpClassName; (void)lpWindowName; (void)dwStyle;
-		(void)X; (void)Y; (void)nWidth; (void)nHeight;
-		(void)hWndParent; (void)hMenu; (void)hInstance; (void)lpParam;
-		return NULL; // No window creation on non-Windows platforms
-	}
-
-	/* RegisterClass stub - returns 0 (atom) on non-Windows */
-	static inline unsigned short RegisterClass(const WNDCLASS* lpWndClass) {
-		(void)lpWndClass;
-		return 0;
-	}
-
 	/* Stock object constants */
 	#define BLACK_BRUSH 4
 	#define WHITE_BRUSH 0
 	#define DC_BRUSH 18
-
-	/* GetStockObject stub - returns NULL on non-Windows */
-	static inline void* GetStockObject(int nIndex) {
-		(void)nIndex;
-		return NULL;
-	}
-
-	/* LoadIcon stub - returns NULL on non-Windows */
-	static inline void* LoadIcon(void* hInstance, const char* lpIconName) {
-		(void)hInstance; (void)lpIconName;
-		return NULL;
-	}
-
-	/* LoadCursor stub - returns NULL on non-Windows */
-	static inline void* LoadCursor(void* hInstance, const char* lpCursorName) {
-		(void)hInstance; (void)lpCursorName;
-		return NULL;
-	}
-
-	/* SetCursor stub - returns NULL on non-Windows */
-	static inline void* SetCursor(void* hCursor) {
-		(void)hCursor;
-		return NULL;
-	}
-
-	/* UpdateWindow stub - does nothing on non-Windows */
-	static inline BOOL UpdateWindow(void* hWnd) {
-		(void)hWnd;
-		return TRUE;
-	}
-
-	/* SetFocus stub - returns NULL on non-Windows */
-	static inline void* SetFocus(void* hWnd) {
-		(void)hWnd;
-		return NULL;
-	}
-
-	/* DefWindowProc stub - default window procedure */
-	static inline LRESULT DefWindowProc(void* hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
-		(void)hWnd; (void)Msg; (void)wParam; (void)lParam;
-		return 0;
-	}
-
-	/* PostQuitMessage stub - no-op on non-Windows */
-	static inline void PostQuitMessage(int nExitCode) {
-		(void)nExitCode;
-	}
-
-	/* GetDoubleClickTime stub - returns default 500ms on non-Windows */
-	static inline int GetDoubleClickTime() {
-		return 500; // Default double-click time in milliseconds
-	}
 
 	/* HMENU typedef */
 	typedef void* HMENU;
@@ -2859,44 +2687,6 @@ static inline DWORD GetModuleFileNameA(HMODULE hModule, LPSTR lpFilename, DWORD 
 #define GetModuleFileName GetModuleFileNameA
 #endif
 
-#ifndef GetWindowThreadProcessId
-static inline DWORD GetWindowThreadProcessId(HWND hWnd, LPDWORD lpdwProcessId) {
-	(void)hWnd;
-	if (lpdwProcessId) *lpdwProcessId = 0;
-	return 0;
-}
-#endif
-
-#ifndef TerminateProcess
-static inline BOOL TerminateProcess(HANDLE hProcess, UINT uExitCode) {
-	(void)hProcess; (void)uExitCode;
-	return FALSE;
-}
-#endif
-
-#ifndef FindClose
-static inline BOOL FindClose(HANDLE hFindFile) {
-	(void)hFindFile;
-	return FALSE;
-}
-#endif
-
-#ifndef FindFirstFileA
-static inline HANDLE FindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATA lpFindFileData) {
-	(void)lpFileName; (void)lpFindFileData;
-	return (HANDLE)INVALID_HANDLE_VALUE;
-}
-#define FindFirstFile FindFirstFileA
-#endif
-
-#ifndef FindNextFileA
-static inline BOOL FindNextFileA(HANDLE hFindFile, LPWIN32_FIND_DATA lpFindFileData) {
-	(void)hFindFile; (void)lpFindFileData;
-	return FALSE;
-}
-#define FindNextFile FindNextFileA
-#endif
-
 #ifndef INVALID_HANDLE_VALUE
 	#define INVALID_HANDLE_VALUE ((HANDLE)(-1))
 #endif
@@ -2907,20 +2697,6 @@ static inline HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES lpMutexAttributes, BOOL 
 	return (HANDLE)NULL;
 }
 #define CreateMutex CreateMutexA
-#endif
-
-#ifndef ReleaseMutex
-static inline BOOL ReleaseMutex(HANDLE hMutex) {
-	(void)hMutex;
-	return FALSE;
-}
-#endif
-
-#ifndef OpenProcess
-static inline HANDLE OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId) {
-	(void)dwDesiredAccess; (void)bInheritHandle; (void)dwProcessId;
-	return (HANDLE)NULL;
-}
 #endif
 
 #ifndef ChangeDisplaySettingsA
@@ -3024,19 +2800,6 @@ static inline BOOL EnumDisplaySettingsA(LPCSTR lpszDeviceName, DWORD iModeNum, L
 #define EnumDisplaySettings EnumDisplaySettingsA
 #endif
 
-#ifndef Sleep
-	/* Sleep for specified milliseconds */
-	#ifdef PLATFORM_WINDOWS
-		/* Use Windows Sleep */
-	#else
-		/* Unix: use usleep */
-		#include <unistd.h>
-		static inline void Sleep(DWORD dwMilliseconds) {
-			usleep(dwMilliseconds * 1000);
-		}
-	#endif
-#endif
-
 /* Spawn functions */
 #ifndef _spawnl
 static inline intptr_t _spawnl(int mode, const char* cmdname, const char* arg0, ...) {
@@ -3091,38 +2854,6 @@ typedef struct tagMSG {
 	DWORD time;
 	POINT pt;
 } MSG, *PMSG, *LPMSG;
-#endif
-
-/* Message processing functions */
-#ifndef GetMessage
-static inline BOOL GetMessage(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax) {
-	(void)hWnd; (void)wMsgFilterMin; (void)wMsgFilterMax;
-	if (lpMsg) {
-		lpMsg->message = WM_QUIT;
-		return FALSE;
-	}
-	return FALSE;
-}
-#endif
-
-#ifndef TranslateMessage
-static inline BOOL TranslateMessage(const MSG* lpMsg) {
-	(void)lpMsg;
-	return FALSE;
-}
-#endif
-
-#ifndef DispatchMessage
-static inline LRESULT DispatchMessage(const MSG* lpMsg) {
-	(void)lpMsg;
-	return 0;
-}
-#endif
-
-#ifndef WaitMessage
-static inline BOOL WaitMessage() {
-	return FALSE;
-}
 #endif
 
 /* PeekMessage flags */
@@ -3218,13 +2949,6 @@ typedef struct _EXCEPTION_POINTERS {
 } EXCEPTION_POINTERS, *PEXCEPTION_POINTERS;
 #endif
 
-#ifndef SetUnhandledExceptionFilter
-static inline LPTOP_LEVEL_EXCEPTION_FILTER SetUnhandledExceptionFilter(LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter) {
-	(void)lpTopLevelExceptionFilter;
-	return NULL;
-}
-#endif
-
 /* DirectDraw caps */
 #ifndef DDSCAPS_VIDEOMEMORY
 	#define DDSCAPS_VIDEOMEMORY 0x00000040
@@ -3247,16 +2971,6 @@ typedef struct _DDCAPS {
 	DWORD dwMaxVisibleOverhead;
 } DDCAPS;
 
-/* SetRect function */
-static inline void SetRect(LPRECT lprc, int xLeft, int yTop, int xRight, int yBottom) {
-    if (lprc) {
-        lprc->left = xLeft;
-        lprc->top = yTop;
-        lprc->right = xRight;
-        lprc->bottom = yBottom;
-    }
-}
-
 /* max and min macros for compatibility with Windows code */
 #ifndef PLATFORM_WINDOWS
 #ifndef max
@@ -3271,26 +2985,11 @@ typedef long long __int64;
 #define _atoi64(x) atoll(x)
 #endif
 
-/* wsprintf stub for macOS - writes formatted output to string */
 #ifndef PLATFORM_WINDOWS
 #include <stdio.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <stdlib.h>
-static inline int wsprintf(char* buf, const char* fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-    int result = vsprintf(buf, fmt, args);
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
-    va_end(args);
-    return result;
-}
 
 /* Windows API stubs for file operations */
 #define FILE_ATTRIBUTE_DIRECTORY (0x00000010)
@@ -3370,41 +3069,6 @@ static inline int wsprintf(char* buf, const char* fmt, ...) {
 #define HIBYTE(w) ((BYTE)((((DWORD_PTR)(w)) >> 8) & 0xff))
 #endif
 
-static inline DWORD GetLogicalDrives() {
-    /* macOS stub - return no drives */
-    return 0;
-}
-
-static inline DWORD GetCurrentDirectory(DWORD nBufferLength, LPSTR lpBuffer) {
-    /* macOS stub - get current working directory */
-    if (getcwd(lpBuffer, nBufferLength) != NULL) {
-        return (DWORD)strlen(lpBuffer);
-    }
-    return 0;
-}
-
-/* GetLocalTime - fill SYSTEMTIME structure with current local time */
-#ifndef PLATFORM_GET_LOCAL_TIME_STUB_DEFINED
-#define PLATFORM_GET_LOCAL_TIME_STUB_DEFINED
-static inline void GetLocalTime(LPSYSTEMTIME lpSystemTime) {
-    /* macOS stub - get current local time */
-    if (lpSystemTime) {
-        struct tm* now;
-        time_t aclock;
-        time(&aclock);
-        now = localtime(&aclock);
-
-        lpSystemTime->wYear = now->tm_year + 1900;
-        lpSystemTime->wMonth = now->tm_mon + 1;
-        lpSystemTime->wDayOfWeek = now->tm_wday;
-        lpSystemTime->wDay = now->tm_mday;
-        lpSystemTime->wHour = now->tm_hour;
-        lpSystemTime->wMinute = now->tm_min;
-        lpSystemTime->wSecond = now->tm_sec;
-        lpSystemTime->wMilliseconds = 0;
-    }
-}
-#endif
 #endif
 
 /* SetSurfaceInfo for SDL backend - copies S_SURFACEINFO */
