@@ -1947,6 +1947,37 @@ typedef WORD			char_t;
 	#define SPI_GETMOUSE			0x0003
 	#define SPI_SETMOUSE			0x0004
 
+	/* Stub for SystemParametersInfo */
+	static inline BOOL SystemParametersInfo(UINT uiAction, UINT uiParam, void* pvParam, UINT fWinIni) {
+		(void)uiAction; (void)uiParam; (void)pvParam; (void)fWinIni;
+		// Non-Windows platforms don't have mouse acceleration settings in the same way
+		return FALSE;
+	}
+
+	/* Note: GetCursorPos and ScreenToClient are defined as inline functions below,
+	   but they require POINT to be fully defined first (included from Client_PCH.h) */
+
+	/* Stub for GetCursorPos - gets mouse position in SDL */
+	static inline BOOL GetCursorPos(void* lpPoint) {
+		if (lpPoint) {
+			typedef struct { LONG x; LONG y; } POINT;
+			POINT* p = (POINT*)lpPoint;
+			int x, y;
+			SDL_GetMouseState(&x, &y);
+			p->x = x;
+			p->y = y;
+			return TRUE;
+		}
+		return FALSE;
+	}
+
+	/* Stub for ScreenToClient - no-op for SDL (coordinates are already relative to window) */
+	static inline BOOL ScreenToClient(void* hWnd, void* lpPoint) {
+		(void)hWnd;
+		// SDL already gives us window-relative coordinates
+		return lpPoint ? TRUE : FALSE;
+	}
+
 	/* String comparison (case-insensitive) - Windows stricmp equivalent */
 	#define stricmp strcasecmp
 
@@ -1970,6 +2001,34 @@ typedef WORD			char_t;
 		DWORD dwFlags;
 		char szExeFile[MAX_PATH];
 	} PROCESSENTRY32;
+
+	/* CreateToolhelp32Snapshot stub - returns invalid handle on non-Windows */
+	static inline void* CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID) {
+		(void)dwFlags;
+		(void)th32ProcessID;
+		return INVALID_HANDLE_VALUE;
+	}
+
+	/* Process32First stub - always fails on non-Windows */
+	static inline BOOL Process32First(void* hSnapshot, PROCESSENTRY32* lppe) {
+		(void)hSnapshot;
+		(void)lppe;
+		return FALSE;
+	}
+
+	/* Process32Next stub - always fails on non-Windows */
+	static inline BOOL Process32Next(void* hSnapshot, PROCESSENTRY32* lppe) {
+		(void)hSnapshot;
+		(void)lppe;
+		return FALSE;
+	}
+
+	/* FindWindow stub - not implemented on non-Windows */
+	static inline void* FindWindow(const char* lpClassName, const char* lpWindowName) {
+		(void)lpClassName;
+		(void)lpWindowName;
+		return NULL; // No window finding on non-Windows platforms
+	}
 
 	/* InitCommonControls stub - no-op on non-Windows */
 	#define InitCommonControls()
@@ -2101,10 +2160,63 @@ typedef WORD			char_t;
 	}
 #endif
 
+	/* RegisterClass stub - returns 0 (atom) on non-Windows */
+	static inline unsigned short RegisterClass(const WNDCLASS* lpWndClass) {
+		(void)lpWndClass;
+		return 0;
+	}
+
 	/* Stock object constants */
 	#define BLACK_BRUSH 4
 	#define WHITE_BRUSH 0
 	#define DC_BRUSH 18
+
+	/* GetStockObject stub - returns NULL on non-Windows */
+	static inline void* GetStockObject(int nIndex) {
+		(void)nIndex;
+		return NULL;
+	}
+
+	/* LoadIcon stub - returns NULL on non-Windows */
+	static inline void* LoadIcon(void* hInstance, const char* lpIconName) {
+		(void)hInstance; (void)lpIconName;
+		return NULL;
+	}
+
+	/* LoadCursor stub - returns NULL on non-Windows */
+	static inline void* LoadCursor(void* hInstance, const char* lpCursorName) {
+		(void)hInstance; (void)lpCursorName;
+		return NULL;
+	}
+
+	/* SetCursor stub - returns NULL on non-Windows */
+	static inline void* SetCursor(void* hCursor) {
+		(void)hCursor;
+		return NULL;
+	}
+
+	/* UpdateWindow stub - does nothing on non-Windows */
+	static inline BOOL UpdateWindow(void* hWnd) {
+		(void)hWnd;
+		return TRUE;
+	}
+
+	/* SetFocus stub - returns NULL on non-Windows */
+	static inline void* SetFocus(void* hWnd) {
+		(void)hWnd;
+		return NULL;
+	}
+
+	/* DefWindowProc stub - default window procedure */
+	static inline LRESULT DefWindowProc(void* hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
+		(void)hWnd; (void)Msg; (void)wParam; (void)lParam;
+		return 0;
+	}
+
+	/* PostQuitMessage stub - no-op on non-Windows */
+	static inline void PostQuitMessage(int nExitCode) {
+		(void)nExitCode;
+	}
 
 	/* HMENU typedef */
 	typedef void* HMENU;
@@ -2698,6 +2810,21 @@ static inline DWORD GetModuleFileNameA(HMODULE hModule, LPSTR lpFilename, DWORD 
 #define GetModuleFileName GetModuleFileNameA
 #endif
 
+#ifndef GetWindowThreadProcessId
+static inline DWORD GetWindowThreadProcessId(HWND hWnd, LPDWORD lpdwProcessId) {
+	(void)hWnd;
+	if (lpdwProcessId) *lpdwProcessId = 0;
+	return 0;
+}
+#endif
+
+#ifndef TerminateProcess
+static inline BOOL TerminateProcess(HANDLE hProcess, UINT uExitCode) {
+	(void)hProcess; (void)uExitCode;
+	return FALSE;
+}
+#endif
+
 #ifndef INVALID_HANDLE_VALUE
 	#define INVALID_HANDLE_VALUE ((HANDLE)(-1))
 #endif
@@ -2708,6 +2835,20 @@ static inline HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES lpMutexAttributes, BOOL 
 	return (HANDLE)NULL;
 }
 #define CreateMutex CreateMutexA
+#endif
+
+#ifndef ReleaseMutex
+static inline BOOL ReleaseMutex(HANDLE hMutex) {
+	(void)hMutex;
+	return FALSE;
+}
+#endif
+
+#ifndef OpenProcess
+static inline HANDLE OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId) {
+	(void)dwDesiredAccess; (void)bInheritHandle; (void)dwProcessId;
+	return (HANDLE)NULL;
+}
 #endif
 
 #ifndef ChangeDisplaySettingsA
@@ -2811,6 +2952,19 @@ static inline BOOL EnumDisplaySettingsA(LPCSTR lpszDeviceName, DWORD iModeNum, L
 #define EnumDisplaySettings EnumDisplaySettingsA
 #endif
 
+#ifndef Sleep
+	/* Sleep for specified milliseconds */
+	#ifdef PLATFORM_WINDOWS
+		/* Use Windows Sleep */
+	#else
+		/* Unix: use usleep */
+		#include <unistd.h>
+		static inline void Sleep(DWORD dwMilliseconds) {
+			usleep(dwMilliseconds * 1000);
+		}
+	#endif
+#endif
+
 /* Spawn functions */
 #ifndef _spawnl
 static inline intptr_t _spawnl(int mode, const char* cmdname, const char* arg0, ...) {
@@ -2865,6 +3019,38 @@ typedef struct tagMSG {
 	DWORD time;
 	POINT pt;
 } MSG, *PMSG, *LPMSG;
+#endif
+
+/* Message processing functions */
+#ifndef GetMessage
+static inline BOOL GetMessage(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax) {
+	(void)hWnd; (void)wMsgFilterMin; (void)wMsgFilterMax;
+	if (lpMsg) {
+		lpMsg->message = WM_QUIT;
+		return FALSE;
+	}
+	return FALSE;
+}
+#endif
+
+#ifndef TranslateMessage
+static inline BOOL TranslateMessage(const MSG* lpMsg) {
+	(void)lpMsg;
+	return FALSE;
+}
+#endif
+
+#ifndef DispatchMessage
+static inline LRESULT DispatchMessage(const MSG* lpMsg) {
+	(void)lpMsg;
+	return 0;
+}
+#endif
+
+#ifndef WaitMessage
+static inline BOOL WaitMessage() {
+	return FALSE;
+}
 #endif
 
 /* PeekMessage flags */
@@ -2958,6 +3144,13 @@ typedef struct _EXCEPTION_POINTERS {
 	DWORD NumberParameters;
 	void* ExceptionInformation[15];
 } EXCEPTION_POINTERS, *PEXCEPTION_POINTERS;
+#endif
+
+#ifndef SetUnhandledExceptionFilter
+static inline LPTOP_LEVEL_EXCEPTION_FILTER SetUnhandledExceptionFilter(LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter) {
+	(void)lpTopLevelExceptionFilter;
+	return NULL;
+}
 #endif
 
 /* DirectDraw caps */
