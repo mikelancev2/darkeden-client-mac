@@ -484,11 +484,19 @@ endif()
 # ============================================================
 # Updater - minimal cross-platform launcher (see Updater/main.cpp)
 # ============================================================
-add_executable(Updater Updater/main.cpp)
+find_package(CURL)
 
-set_target_properties(Updater PROPERTIES
-	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
+if(CURL_FOUND)
+	add_executable(Updater Updater/main.cpp)
+
+	target_link_libraries(Updater PRIVATE CURL::libcurl)
+
+	set_target_properties(Updater PROPERTIES
+		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+	)
+else()
+	message(WARNING "libcurl not found - skipping Updater target (needs: brew/apt install curl / libcurl-dev)")
+endif()
 
 # Dark Eden Client Executable
 if(USE_SDL_BACKEND OR NOT WIN32)
