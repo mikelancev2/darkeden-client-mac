@@ -1,0 +1,35 @@
+name: macOS Build
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install cmake sdl2 sdl2_image sdl2_ttf jpeg
+
+      - name: Build (release)
+        run: make release NPROCS=3
+
+      - name: Upload DarkEden binary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DarkEden-macos
+          path: build/release/bin/DarkEden
+          if-no-files-found: warn
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build/release/CMakeFiles/CMakeOutput.log
+          if-no-files-found: ignore
