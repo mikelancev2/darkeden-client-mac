@@ -3082,19 +3082,6 @@ typedef long long __int64;
 
 #endif
 
-/* SetSurfaceInfo for SDL backend - copies S_SURFACEINFO */
-#ifndef PLATFORM_WINDOWS
-#include "2d.h"
-static inline void SetSurfaceInfo(S_SURFACEINFO* dest, const S_SURFACEINFO* src) {
-    if (dest && src) {
-        dest->p_surface = src->p_surface;
-        dest->width = src->width;
-        dest->height = src->height;
-        dest->pitch = src->pitch;
-    }
-}
-#endif
-
 /* DirectInput key codes for non-Windows platforms */
 #ifndef PLATFORM_WINDOWS
 /* DIK_LMENU and DIK_RMENU are the DirectInput names for Left/Right ALT */
