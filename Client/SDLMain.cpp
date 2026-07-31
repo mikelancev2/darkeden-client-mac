@@ -63,6 +63,14 @@
 #include <Platform.h>
 #include "Packet/Exception.h"  // For NoSuchElementException, Throwable
 #include "DXLib/DXLibBackend.h"  // For dxlib_input_update
+// SEH (Structured Exception Handling) is a Windows-only OS/MSVC feature -
+// eh.h, _set_se_translator, and the raw x86 Win32 CONTEXT-struct offsets
+// this section relies on don't exist on macOS/Linux. Everything from here
+// through the SEHTranslator/GetModuleHandleA declarations below, plus the
+// _set_se_translator() call and catch(SEHException&) block further down in
+// this file, is compiled only on a real Windows host; other platforms fall
+// through to the generic catch(...) block instead.
+#ifdef PLATFORM_WIN32_HOST
 #include <eh.h>  // _set_se_translator - see SEHException below
 
 // Structured exceptions (access violation, etc.) surface here as an
@@ -161,6 +169,7 @@ void SEHTranslator(unsigned int code, struct _EXCEPTION_POINTERS* pExp)
 // For logging the module base only (see the SEHException catch block) -
 // avoids pulling in a full <windows.h> just for this one call.
 extern "C" __declspec(dllimport) HMODULE __stdcall GetModuleHandleA(const char* lpModuleName);
+#endif /* PLATFORM_WIN32_HOST */
 
 // Language detection
 enum DARKEDEN_LANGUAGE
@@ -395,7 +404,9 @@ static void CleanupSDL()
  *-----------------------------------------------------------------------------*/
 int main(int argc, char* argv[])
 {
+#ifdef PLATFORM_WIN32_HOST
 	_set_se_translator(SEHTranslator);
+#endif
 
 	SDLMAIN_DEBUG("DEBUG: Dark Eden SDL2 starting...\n");
 
@@ -714,6 +725,7 @@ int main(int argc, char* argv[])
 		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "FATAL: Throwable: %s\n", t.toString().c_str()); fclose(f); } }
 		return 1;
 	}
+#ifdef PLATFORM_WIN32_HOST
 	catch (SEHException& se) {
 		fprintf(stderr, "ERROR: structured exception code=0x%08X\n", se.m_code);
 		{
@@ -747,6 +759,7 @@ int main(int argc, char* argv[])
 		}
 		return 1;
 	}
+#endif
 	catch (std::exception& e) {
 		fprintf(stderr, "ERROR: std::exception: %s\n", e.what());
 		{ FILE* f = fopen("Log/ui_debug.log", "a"); if (f) { fprintf(f, "FATAL: std::exception: %s\n", e.what()); fclose(f); } }
