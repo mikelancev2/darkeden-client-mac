@@ -481,6 +481,15 @@ endif()
 # 	add_subdirectory(examples)
 # endif()
 
+# ============================================================
+# Updater - minimal cross-platform launcher (see Updater/main.cpp)
+# ============================================================
+add_executable(Updater Updater/main.cpp)
+
+set_target_properties(Updater PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
 # Dark Eden Client Executable
 if(USE_SDL_BACKEND OR NOT WIN32)
 	# Collect remaining Client source files (excluding those already in VS_UI)
