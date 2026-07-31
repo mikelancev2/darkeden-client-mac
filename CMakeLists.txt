@@ -482,14 +482,30 @@ endif()
 # endif()
 
 # ============================================================
-# Updater - minimal cross-platform launcher (see Updater/main.cpp)
+# Updater - launcher + patch checker.
+# On macOS: AppKit/WKWebView GUI (main.mm) matching the real Windows
+# Updater's look via HTML/CSS. Elsewhere: plain console version
+# (main.cpp) - see Updater/README in each file's header comment.
 # ============================================================
 find_package(CURL)
 
 if(CURL_FOUND)
-	add_executable(Updater Updater/main.cpp)
+	if(APPLE)
+		add_executable(Updater Updater/main.mm Updater/update_logic.cpp)
+		target_link_libraries(Updater PRIVATE CURL::libcurl "-framework Cocoa" "-framework WebKit")
+		target_compile_options(Updater PRIVATE -fobjc-arc)
 
-	target_link_libraries(Updater PRIVATE CURL::libcurl)
+		# main.mm loads ui/index.html relative to the executable's own
+		# directory at runtime, so the UI folder needs to sit next to it.
+		add_custom_command(TARGET Updater POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_directory
+				${CMAKE_CURRENT_SOURCE_DIR}/Updater/ui
+				$<TARGET_FILE_DIR:Updater>/ui
+		)
+	else()
+		add_executable(Updater Updater/main.cpp Updater/update_logic.cpp)
+		target_link_libraries(Updater PRIVATE CURL::libcurl)
+	endif()
 
 	set_target_properties(Updater PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin

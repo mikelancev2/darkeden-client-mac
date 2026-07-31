@@ -26,12 +26,14 @@ jobs:
           path: build/release/bin/DarkEden
           if-no-files-found: warn
 
-      - name: Upload Updater binary
+      - name: Upload Updater binary + UI
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Updater-macos
-          path: build/release/bin/Updater
+          path: |
+            build/release/bin/Updater
+            build/release/bin/ui
           if-no-files-found: warn
 
       - name: Upload build log on failure
