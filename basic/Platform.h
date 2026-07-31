@@ -2606,18 +2606,6 @@ typedef struct tagRECT {
     LONG bottom;
 } RECT, *PRECT, *LPRECT;
 
-/**
- * MINMAXINFO structure (used in WM_GETMINMAXINFO)
- * Contains information about a window's maximized size and position
- */
-typedef struct tagMINMAXINFO {
-    POINT ptReserved;
-    POINT ptMaxSize;
-    POINT ptMaxPosition;
-    POINT ptMinTrackSize;
-    POINT ptMaxTrackSize;
-} MINMAXINFO, *PMINMAXINFO, *LPMINMAXINFO;
-
 /* SYSTEMTIME structure (date and time) */
 #ifndef PLATFORM_SYSTEMTIME_DEFINED
 #define PLATFORM_SYSTEMTIME_DEFINED
@@ -2634,6 +2622,24 @@ typedef struct _SYSTEMTIME {
 #endif
 
 #endif /* RECT_DEFINED */
+
+/**
+ * MINMAXINFO structure (used in WM_GETMINMAXINFO)
+ * Contains information about a window's maximized size and position
+ * Given its own guard for the same reason as DEVMODE above: it was
+ * bundled inside RECT_DEFINED with no guard of its own, so once
+ * RECT_DEFINED was already set elsewhere this was silently skipped too.
+ */
+#ifndef MINMAXINFO_DEFINED
+#define MINMAXINFO_DEFINED
+typedef struct tagMINMAXINFO {
+    POINT ptReserved;
+    POINT ptMaxSize;
+    POINT ptMaxPosition;
+    POINT ptMinTrackSize;
+    POINT ptMaxTrackSize;
+} MINMAXINFO, *PMINMAXINFO, *LPMINMAXINFO;
+#endif /* MINMAXINFO_DEFINED */
 
 /* DEVMODE structure (display mode settings)
  * Deliberately NOT nested inside the RECT_DEFINED guard above (it used to
