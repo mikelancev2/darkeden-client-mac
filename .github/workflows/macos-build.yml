@@ -56,26 +56,7 @@ jobs:
           chmod +x tools/package_macos_app.sh
           tools/package_macos_app.sh
 
-      - name: Upload DarkEden binary
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: DarkEden-macos
-          path: build/release/bin/DarkEden
-          if-no-files-found: warn
-
-      - name: Upload Updater binary + UI
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Updater-macos
-          path: |
-            build/release/bin/Updater
-            build/release/bin/ui
-          if-no-files-found: warn
-
       - name: Upload complete macOS app package
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DarkEden-Classic-macOS-app
