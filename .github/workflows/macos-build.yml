@@ -35,26 +35,70 @@ jobs:
             --clobber
           test -f /tmp/darkeden-data/Data-mac.zip
           ls -lh /tmp/darkeden-data/Data-mac.zip
-          echo "Extracting Data-mac.zip..."
-          ditto -x -k /tmp/darkeden-data/Data-mac.zip /tmp/darkeden-data/extract
-          if [ -d /tmp/darkeden-data/extract/Data ]; then
-            rm -rf Patch/mac/Data
-            mv /tmp/darkeden-data/extract/Data Patch/mac/Data
-            echo "Data folder ready:"
-            du -sh Patch/mac/Data
-          else
-            echo "Data-mac.zip did not contain a top-level Data folder. Contents:"
-            find /tmp/darkeden-data/extract -maxdepth 2 -type d | head -50
-            if [ -d /tmp/darkeden-data/extract/mac/Data ]; then
-              rm -rf Patch/mac/Data
-              mv /tmp/darkeden-data/extract/mac/Data Patch/mac/Data
-              echo "Data folder ready from mac/Data:"
-              du -sh Patch/mac/Data
-            else
-              echo "ERROR: Could not find Data folder in Data-mac.zip"
-              exit 1
-            fi
-          fi
+          echo "Extracting Data-mac.zip and normalizing paths..."
+          python3 - <<'PY'
+          import os
+          import shutil
+          import sys
+          import zipfile
+
+          zip_path = "/tmp/darkeden-data/Data-mac.zip"
+          normalized_root = "/tmp/darkeden-data/normalized"
+          data_out = os.path.join(normalized_root, "Data")
+
+          shutil.rmtree(normalized_root, ignore_errors=True)
+          os.makedirs(normalized_root, exist_ok=True)
+
+          extracted = 0
+          skipped = 0
+          first_names = []
+
+          with zipfile.ZipFile(zip_path) as zf:
+              for info in zf.infolist():
+                  raw_name = info.filename
+                  if len(first_names) < 80:
+                      first_names.append(raw_name)
+
+                  # ZIPs made on Windows can store backslashes as literal
+                  # characters. macOS unzip/ditto may then fail to create the
+                  # Data directory shape we need. Normalize both separators.
+                  name = raw_name.replace("\\", "/").lstrip("/")
+                  parts = [part for part in name.split("/") if part and part not in (".", "..")]
+                  lower_parts = [part.lower() for part in parts]
+
+                  if "data" not in lower_parts:
+                      skipped += 1
+                      continue
+
+                  data_index = lower_parts.index("data")
+                  rel_parts = parts[data_index:]
+                  if not rel_parts:
+                      skipped += 1
+                      continue
+
+                  out_path = os.path.join(normalized_root, *rel_parts)
+                  if info.is_dir() or raw_name.endswith(("/", "\\")):
+                      os.makedirs(out_path, exist_ok=True)
+                      continue
+
+                  os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                  with zf.open(info) as src, open(out_path, "wb") as dst:
+                      shutil.copyfileobj(src, dst)
+                  extracted += 1
+
+          print(f"Extracted Data files: {extracted}")
+          print(f"Skipped non-Data entries: {skipped}")
+          if not os.path.isdir(data_out) or extracted == 0:
+              print("ERROR: Could not find/extract a Data folder in Data-mac.zip")
+              print("First ZIP entries:")
+              for name in first_names:
+                  print(f"  {name}")
+              sys.exit(1)
+          PY
+          rm -rf Patch/mac/Data
+          mv /tmp/darkeden-data/normalized/Data Patch/mac/Data
+          echo "Data folder ready:"
+          du -sh Patch/mac/Data
 
       - name: Package macOS app
         run: |
