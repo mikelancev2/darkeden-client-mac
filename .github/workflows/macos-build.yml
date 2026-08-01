@@ -3,10 +3,24 @@ name: macOS Build
 on:
   push:
     branches: [ master ]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish complete macOS .app ZIP to GitHub Releases"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      release_tag:
+        description: "Release tag to create/update when publishing"
+        required: true
+        default: "mac-latest"
+        type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -111,6 +125,61 @@ jobs:
           name: DarkEden-Classic-macOS-app
           path: build/package/macos/DarkEden-Classic-macOS-arm64.zip
           if-no-files-found: warn
+
+      - name: Publish complete macOS app release
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -e
+          ZIP_PATH="build/package/macos/DarkEden-Classic-macOS-arm64.zip"
+          test -f "$ZIP_PATH"
+          ls -lh "$ZIP_PATH"
+
+          cat > /tmp/darkeden-macos-release-notes.md <<'NOTES'
+          # DarkEden Classic macOS
+
+          Pacote completo para macOS Apple Silicon.
+
+          Inclui:
+          - DarkEden Classic.app
+          - Updater
+          - Client
+          - Data completa
+          - bibliotecas SDL2 embutidas
+
+          Como usar:
+          1. Baixe `DarkEden-Classic-macOS-arm64.zip`.
+          2. Extraia o ZIP.
+          3. Abra `DarkEden Classic.app`.
+
+          Se o macOS bloquear:
+
+          ```bash
+          xattr -dr com.apple.quarantine "DarkEden Classic.app"
+          open "DarkEden Classic.app"
+          ```
+
+          Observacao: este pacote e ad-hoc signed, mas ainda nao e notarizado pela Apple.
+          NOTES
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Updating existing release: $RELEASE_TAG"
+            gh release upload "$RELEASE_TAG" "$ZIP_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "DarkEden Classic macOS" \
+              --notes-file /tmp/darkeden-macos-release-notes.md
+          else
+            echo "Creating release: $RELEASE_TAG"
+            gh release create "$RELEASE_TAG" "$ZIP_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "DarkEden Classic macOS" \
+              --notes-file /tmp/darkeden-macos-release-notes.md
+          fi
 
       - name: Upload build log on failure
         if: failure()
