@@ -18,6 +18,36 @@ jobs:
       - name: Build (release)
         run: make release NPROCS=3
 
+      - name: Download Data pack from release (optional)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          mkdir -p /tmp/darkeden-data/extract
+          if gh release view data-mac-v1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Found release data-mac-v1, downloading Data-mac.zip..."
+            gh release download data-mac-v1 \
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "Data-mac.zip" \
+              --dir /tmp/darkeden-data
+            if [ -f /tmp/darkeden-data/Data-mac.zip ]; then
+              ditto -x -k /tmp/darkeden-data/Data-mac.zip /tmp/darkeden-data/extract
+              if [ -d /tmp/darkeden-data/extract/Data ]; then
+                rm -rf Patch/mac/Data
+                mv /tmp/darkeden-data/extract/Data Patch/mac/Data
+              else
+                echo "Data-mac.zip did not contain a top-level Data folder; package will be generated without Data."
+              fi
+            fi
+          else
+            echo "Release data-mac-v1 not found; package will be generated without Data."
+          fi
+
+      - name: Package macOS app
+        run: |
+          chmod +x tools/package_macos_app.sh
+          tools/package_macos_app.sh
+
       - name: Upload DarkEden binary
         if: always()
         uses: actions/upload-artifact@v4
@@ -34,6 +64,14 @@ jobs:
           path: |
             build/release/bin/Updater
             build/release/bin/ui
+          if-no-files-found: warn
+
+      - name: Upload complete macOS app package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DarkEden-Classic-macOS-app
+          path: build/package/macos/DarkEden-Classic-macOS-arm64.zip
           if-no-files-found: warn
 
       - name: Upload build log on failure
