@@ -23,24 +23,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
+          DATA_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/data-mac-v1/Data-mac.zip"
           mkdir -p /tmp/darkeden-data/extract
-          if gh release view data-mac-v1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Found release data-mac-v1, downloading Data-mac.zip..."
-            gh release download data-mac-v1 \
-              --repo "$GITHUB_REPOSITORY" \
-              --pattern "Data-mac.zip" \
-              --dir /tmp/darkeden-data
-            if [ -f /tmp/darkeden-data/Data-mac.zip ]; then
-              ditto -x -k /tmp/darkeden-data/Data-mac.zip /tmp/darkeden-data/extract
-              if [ -d /tmp/darkeden-data/extract/Data ]; then
-                rm -rf Patch/mac/Data
-                mv /tmp/darkeden-data/extract/Data Patch/mac/Data
-              else
-                echo "Data-mac.zip did not contain a top-level Data folder; package will be generated without Data."
-              fi
-            fi
+          echo "Downloading Data-mac.zip from ${DATA_URL}..."
+          curl -L --fail --retry 3 --retry-delay 5 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -o /tmp/darkeden-data/Data-mac.zip \
+            "$DATA_URL"
+          echo "Extracting Data-mac.zip..."
+          ditto -x -k /tmp/darkeden-data/Data-mac.zip /tmp/darkeden-data/extract
+          if [ -d /tmp/darkeden-data/extract/Data ]; then
+            rm -rf Patch/mac/Data
+            mv /tmp/darkeden-data/extract/Data Patch/mac/Data
+            echo "Data folder ready:"
+            du -sh Patch/mac/Data
           else
-            echo "Release data-mac-v1 not found; package will be generated without Data."
+            echo "Data-mac.zip did not contain a top-level Data folder. Contents:"
+            find /tmp/darkeden-data/extract -maxdepth 2 -type d | head -50
+            if [ -d /tmp/darkeden-data/extract/mac/Data ]; then
+              rm -rf Patch/mac/Data
+              mv /tmp/darkeden-data/extract/mac/Data Patch/mac/Data
+              echo "Data folder ready from mac/Data:"
+              du -sh Patch/mac/Data
+            else
+              echo "ERROR: Could not find Data folder in Data-mac.zip"
+              exit 1
+            fi
           fi
 
       - name: Package macOS app
